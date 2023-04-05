@@ -11,7 +11,19 @@ When creating a new Spago project, you can use
 to generate this file without the comments in this block.
 -}
 { name = "fixlat"
-, dependencies = [ "console", "effect", "lists", "prelude" ]
+, dependencies =
+  [ "arrays"
+  , "console"
+  , "effect"
+  , "enums"
+  , "foldable-traversable"
+  , "lists"
+  , "maybe"
+  , "newtype"
+  , "partial"
+  , "prelude"
+  , "tuples"
+  ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
 }
