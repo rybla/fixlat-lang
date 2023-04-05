@@ -1,5 +1,6 @@
-module DijkstraRelations where
+module DijkstraRelations1 where
 
+import Data.Tuple.Nested
 import Effect.Random
 import Prelude
 import Control.Monad.State (StateT, execStateT, get, gets, lift, modify_)
@@ -8,19 +9,17 @@ import Data.Array as Array
 import Data.Eq.Generic (genericEq)
 import Data.Foldable (foldr, traverse_)
 import Data.Generic.Rep (class Generic)
-import Data.List (List)
+import Data.List (List(..))
 import Data.List as List
 import Data.Map as Map
 import Data.Maybe (Maybe(..), maybe)
-import Data.Newtype (class Newtype, unwrap, wrap)
+import Data.Newtype (class Newtype, over, unwrap, wrap)
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Effect.Class.Console as Console
 import Effect.Exception.Unsafe (unsafeThrow)
 import Fixpoint (fixpointM)
 import Lattice (class JoinLattice, class OrdPartial, comparePartial, maxPartial)
-import PriorityQueue (PriorityQueue)
-import PriorityQueue as PriorityQueue
 import Utility (showMap, showMap')
 
 {-
@@ -188,7 +187,7 @@ insertDist d = do
 
 popNext :: M (Maybe Dist)
 popNext = do
-  gets (PriorityQueue.pop <<< _.nexts)
+  gets (pop <<< _.nexts)
     >>= case _ of
         Nothing -> pure Nothing
         Just (nexts /\ d) -> do
@@ -198,7 +197,7 @@ popNext = do
 insertNext :: Dist -> M Unit
 insertNext d = do
   lift $ Console.log $ "insertNext: d = " <> show d
-  modify_ \store -> store { nexts = PriorityQueue.insert (wrap d) store.nexts }
+  modify_ \store -> store { nexts = insert (wrap d) store.nexts }
 
 isVisited :: Node -> M Boolean
 isVisited node = do gets \store -> Map.member node store.dists
@@ -324,7 +323,7 @@ main = do
       { steps: indexSteps steps
       , dists: Map.empty
       , nexts:
-          PriorityQueue.fromArray
+          fromArray
             [ wrap (Step { source: Node 0, target: Node 0, weight: makeFiniteWeight 0 })
             ]
       }
@@ -332,7 +331,8 @@ main = do
   store' <-
     execStateT
       ( do
-          fixpointM unit visitNextStep
+          -- fixpointM unit visitNextStep
+          unsafeThrow "TODO: Maybe ~> Either"
       )
       store
   Console.log $ showStore store'
@@ -373,3 +373,37 @@ indexSteps =
           step.source
     )
     Map.empty
+
+-- | PriorityQueue
+-- stores items in order from greatest to least
+newtype PriorityQueue a
+  = PriorityQueue (List a)
+
+derive instance newtypePriorityQueue :: Newtype (PriorityQueue a) _
+
+derive newtype instance showPriorityQueue :: Show a => Show (PriorityQueue a)
+
+insert :: forall a. Ord a => a -> PriorityQueue a -> PriorityQueue a
+insert a = over PriorityQueue go
+  where
+  go = case _ of
+    Nil -> Cons a Nil
+    Cons a' as ->
+      if a > a' then
+        Cons a (Cons a' as)
+      else
+        Cons a' (go as)
+
+pop :: forall a. PriorityQueue a -> Maybe (PriorityQueue a /\ a)
+pop q = case unwrap q of
+  Nil -> Nothing
+  Cons a as -> Just $ wrap as /\ a
+
+empty :: forall a. PriorityQueue a
+empty = wrap mempty
+
+fromList :: forall a. Ord a => List a -> PriorityQueue a
+fromList = PriorityQueue <<< List.sort
+
+fromArray :: forall a. Ord a => Array a -> PriorityQueue a
+fromArray = PriorityQueue <<< List.fromFoldable <<< Array.sort

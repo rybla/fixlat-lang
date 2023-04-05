@@ -4,14 +4,18 @@ import Prelude
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 
-fixpoint :: forall a. a -> (a -> Either a a) -> a
+fixpoint :: forall a b. a -> (a -> Either b a) -> b
 fixpoint a f = case f a of
-  Left a' -> a'
+  Left b -> b
   Right a' -> fixpoint a' f
 
-fixpointM :: forall m a. Monad m => a -> (a -> m (Maybe a)) -> m a
-fixpointM a f =
+type LoopT :: (Type -> Type) -> Type -> Type -> Type
+type LoopT m a b
+  = a -> m (Either b a)
+
+fixpointM :: forall m a b. Monad m => (a -> m (Either b a)) -> a -> m b
+fixpointM f a =
   f a
     >>= case _ of
-        Nothing -> pure a
-        Just a' -> fixpointM a' f
+        Left b -> pure b
+        Right a' -> fixpointM f a'

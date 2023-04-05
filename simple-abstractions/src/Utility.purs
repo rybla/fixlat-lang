@@ -1,8 +1,10 @@
 module Utility where
 
 import Prelude
+import Control.Apply (lift2)
 import Data.Array as Array
 import Data.Foldable (foldr)
+import Data.List (List(..), (:))
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
@@ -35,3 +37,15 @@ showMap' show_k show_v m =
         $ (Map.toUnfoldable m :: Array (Tuple k v))
     , "]"
     ]
+
+-- > fan ((1 : 2 : Nil) : (3 : 4 : Nil) : (5 : Nil) : Nil)
+-- ((1 : 3 : 5 : Nil) : (1 : 4 : 5 : Nil) : (2 : 3 : 5 : Nil) : (2 : 4 : 5 : Nil) : Nil)
+fan :: forall a. List (List a) -> List (List a)
+fan Nil = Nil : Nil
+
+fan (xs : xss) = do
+  lift2 Cons xs (fan xss)
+
+-- prefers first if compare EQ
+maxBy :: forall a b. Ord b => (a -> b) -> a -> a -> a
+maxBy f a1 a2 = if f a1 >= f a2 then a1 else a2

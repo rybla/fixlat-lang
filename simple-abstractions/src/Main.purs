@@ -14,6 +14,7 @@ main = do
   log $ "path = " <> show path
 -}
 import Prelude
-import DijkstraRelations as DijkstraRelations
+import DijkstraRelations1 as DijkstraRelations1
+import DijkstraRelations3Test as DijkstraRelations3Test
 
-main = DijkstraRelations.main
+main = DijkstraRelations3Test.main

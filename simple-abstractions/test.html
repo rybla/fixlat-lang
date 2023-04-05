@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test</title>
+</head>
+
+<body>
+
+  <div id="container">
+    <svg width="500" height="500">
+      <rect width="300" height="100"></rect>
+    </svg>
+  </div>
+
+  <style>
+    #container svg {
+      border: 1px solid black;
+    }
+  </style>
+
+  <script>
+    let container = document.getElementById("container")
+    let svg = container.children[0]
+    console.log(svg)
+
+    function getNode(n, v) {
+      n = document.createElementNS("http://www.w3.org/2000/svg", n);
+      for (var p in v)
+        n.setAttributeNS(null, p.replace(/[A-Z]/g, function (m, p, o, s) { return "-" + m.toLowerCase(); }), v[p]);
+      return n
+    }
+
+    let rect = getNode("rect", { x: "0", y: "0", height: "500", width: "100", fill: "red" })
+    svg.appendChild(rect)
+  </script>
+
+</body>
+
+</html>

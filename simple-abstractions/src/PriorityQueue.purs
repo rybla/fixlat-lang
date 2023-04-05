@@ -9,34 +9,58 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, over, unwrap, wrap)
 
 -- stores items in order from greatest to least
-newtype PriorityQueue a
-  = PriorityQueue (List a)
+newtype PriorityQueue p a
+  = PriorityQueue
+  { priority :: a -> p
+  , items :: List a
+  }
 
-derive instance newtypePriorityQueue :: Newtype (PriorityQueue a) _
+derive instance newtypePriorityQueue :: Newtype (PriorityQueue p a) _
 
-derive newtype instance showPriorityQueue :: Show a => Show (PriorityQueue a)
-
-insert :: forall a. Ord a => a -> PriorityQueue a -> PriorityQueue a
-insert a = over PriorityQueue go
+-- derive newtype instance showPriorityQueue :: Show a => Show (PriorityQueue p a)
+insert :: forall p a. Ord p => a -> PriorityQueue p a -> PriorityQueue p a
+insert a q = over PriorityQueue (\q -> q { items = go q.items }) q
   where
+  priority = (unwrap q).priority
+
   go = case _ of
     Nil -> Cons a Nil
     Cons a' as ->
-      if a > a' then
+      if priority a > priority a' then
         Cons a (Cons a' as)
       else
         Cons a' (go as)
 
-pop :: forall a. PriorityQueue a -> Maybe (PriorityQueue a /\ a)
-pop q = case unwrap q of
+pop :: forall p a. PriorityQueue p a -> Maybe (PriorityQueue p a /\ a)
+pop q = case (unwrap q).items of
   Nil -> Nothing
-  Cons a as -> Just $ wrap as /\ a
+  Cons a as -> Just $ over PriorityQueue (_ { items = as }) q /\ a
 
-empty :: forall a. PriorityQueue a
-empty = wrap mempty
+clear :: forall p a. PriorityQueue p a -> PriorityQueue p a
+clear = over PriorityQueue (_ { items = Nil })
 
-fromList :: forall a. Ord a => List a -> PriorityQueue a
-fromList = PriorityQueue <<< List.sort
+fromList :: forall p a. Ord p => (a -> p) -> List a -> PriorityQueue p a
+fromList priority items =
+  PriorityQueue
+    { priority
+    , items:
+        List.sortBy
+          (\a1 a2 -> compare (priority a1) (priority a2))
+          items
+    }
 
-fromArray :: forall a. Ord a => Array a -> PriorityQueue a
-fromArray = PriorityQueue <<< List.fromFoldable <<< Array.sort
+toList :: forall p a. PriorityQueue p a -> List a
+toList q = (unwrap q).items
+
+fromArray :: forall p a. Ord p => (a -> p) -> Array a -> PriorityQueue p a
+fromArray priority = fromList priority <<< Array.toUnfoldable
+
+null :: forall p a. PriorityQueue p a -> Boolean
+null = List.null <<< toList
+
+empty :: forall p a. (a -> p) -> PriorityQueue p a
+empty priority =
+  PriorityQueue
+    { priority
+    , items: mempty
+    }

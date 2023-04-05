@@ -31,6 +31,7 @@ type Input v e w
     , vEnd :: v
     }
 
+{-
 shortestPath ::
   forall m mem v e w.
   -- m
@@ -127,3 +128,4 @@ type IMemory mem v e w
 --     , previous: Map.empty
 --     , v: vStart
 --     }
+-}
