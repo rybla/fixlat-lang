@@ -4,6 +4,7 @@ import Language.Fixlat.Grammar
 import Prelude
 import Data.Maybe
 
+{-
 module1 :: Module
 module1 =
   let
@@ -46,3 +47,4 @@ module1 =
                   }
           ]
       }
+-}
