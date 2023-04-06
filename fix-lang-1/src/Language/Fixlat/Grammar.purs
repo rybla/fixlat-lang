@@ -1,8 +1,13 @@
 -- | Syntax types for language.
+-- |
+-- | Limitations:
+-- | - no user-defined data; everything is primitive
 module Language.Fixlat.Grammar where
 
+import Container
 import Data.Array
 import Data.Generic.Rep
+import Data.Lattice
 import Data.Maybe
 import Data.Newtype
 import Data.Show.Generic
@@ -10,6 +15,9 @@ import Prelude
 import Pretty
 import Utility
 import Data.Enum (enumFromTo)
+import Data.Eq.Generic (genericEq)
+import Data.Ord.Generic (genericCompare)
+import Partial.Unsafe (unsafeCrashWith)
 
 newtype Module ann
   = Module
@@ -45,12 +53,12 @@ instance prettyStatement :: Pretty (Statement ann) where
   pretty (RuleStatement rule) = pretty rule
   pretty (QueryStatement query) = pretty query
 
--- | A __predicate__ declaration.
+-- | A top-level __predicate__ declaration.
 newtype Predicate
   = Predicate
   { label :: String
   , name :: Name
-  , params :: Array { name :: Name, sort :: Sort } -- parameters
+  , param :: { name :: Name, sort :: Sort }
   }
 
 derive instance genericPredicate :: Generic Predicate _
@@ -62,19 +70,14 @@ instance prettyPredicate :: Pretty Predicate where
   pretty (Predicate pred) =
     "predicate" ~ pred.label ~ ":"
       ~ pred.name
-      ~ ( if null pred.params then
-            mempty
-          else
-            brackets <<< commas <<< (_ <$> pred.params)
-              $ \p -> p.name ~ ":" ~ p.sort
-        )
+      ~ braces (pred.param.name ~ "," ~ pred.param.sort)
 
--- | An inference __rule__ declaration.
+-- | An top-level inference __rule__ declaration.
 newtype Rule ann
   = Rule
   { label :: Label
   , params :: Array Name -- parameters (universally quantified)
-  , hyps :: Array (Term ann) --hypotheses
+  , hyps :: Array (Term ann) -- hypotheses
   , con :: Term ann -- conclusion
   }
 
@@ -95,12 +98,12 @@ instance prettyRule :: Pretty (Rule ann) where
             ]
       ]
 
--- | A __query__.
+-- | A top-level __query__.
 newtype Query ann
   = Query
   { params :: Array Name -- parameters (universally quantified)
   , hyps :: Array (Term ann) --hypotheses
-  , cons :: Array (Term ann) -- conclusions
+  , con :: Term ann -- conclusion
   }
 
 derive instance genericQuery :: Generic (Query ann) _
@@ -117,15 +120,48 @@ instance prettyQuery :: Pretty (Query ann) where
       , indent <<< vcat
           $ [ vcat $ query.hyps
             , pretty "----------------"
-            , vcat $ query.cons
+            , pretty query.con
             ]
       ]
 
--- | A __proposition__. _Can_ have quantifications.
-data Prop ann
-  = TermProp (Term ann)
+-- | A __sort__. Every sort has a lattice structure defined over its terms.
+data Sort
+  = UnitPrimSort
+  | BoolPrimSort
+  | PredSort Name
+
+derive instance genericSort :: Generic Sort _
+
+instance eqSort :: Eq Sort where
+  eq x = genericEq x
+
+instance showSort :: Show Sort where
+  show x = genericShow x
+
+instance prettySort :: Pretty Sort where
+  pretty UnitPrimSort = pretty "Unit"
+  pretty BoolPrimSort = pretty "Bool"
+  pretty (PredSort x) = pretty x
+
+-- | A __qualified proposition__.
+data QualProp ann
+  = UnqualProp (Prop ann)
   | ForallProp { name :: Name, prop :: Prop ann }
   | ExistsProp { name :: Name, prop :: Prop ann }
+
+derive instance genericQualProp :: Generic (QualProp ann) _
+
+instance showQualProp :: Show ann => Show (QualProp ann) where
+  show x = genericShow x
+
+instance prettyQualProp :: Pretty (QualProp ann) where
+  pretty (UnqualProp prop) = pretty prop
+  pretty (ForallProp all) = "∀" ~ all.name ~ "." ~ all.prop
+  pretty (ExistsProp exi) = "∃" ~ exi.name ~ "." ~ exi.prop
+
+-- | An unqualified __proposition__.
+data Prop ann
+  = Prop { name :: Name, arg :: Term ann }
 
 derive instance genericProp :: Generic (Prop ann) _
 
@@ -133,70 +169,26 @@ instance showProp :: Show ann => Show (Prop ann) where
   show x = genericShow x
 
 instance prettyProp :: Pretty (Prop ann) where
-  pretty (TermProp ex) = pretty ex
-  pretty (ForallProp all) = "∀" ~ all.name ~ "." ~ all.prop
-  pretty (ExistsProp exi) = "∃" ~ exi.name ~ "." ~ exi.prop
+  pretty (Prop prop) = prop.name ~ braces prop.arg
 
--- | A __sort__. Every sort has a lattice structure defined over it.
-data Sort
-  = PrimSort PrimSort
-
-derive instance genericSort :: Generic Sort _
-
-instance showSort :: Show Sort where
-  show x = genericShow x
-
-instance prettySort :: Pretty Sort where
-  pretty (PrimSort prim) = pretty prim
-
-data PrimSort
-  = UnitPrimSort
-  | BoolPrimSort
-
-derive instance genericPrimSort :: Generic PrimSort _
-
-instance showPrimSort :: Show PrimSort where
-  show x = genericShow x
-
-instance prettyPrimSort :: Pretty PrimSort where
-  pretty UnitPrimSort = pretty "Unit"
-  pretty BoolPrimSort = pretty "Bool"
-
--- | A __term__. _Cannot_ have quantifications.
+-- | A __term__ corresponds to an instance of data. _Cannot_ have
+-- | quantifications.
 data Term ann
-  = NeuTerm { name :: Name, args :: Array (Term ann), ann :: ann }
-  | PrimTerm (PrimTerm ann)
+  = UnitTerm { ann :: ann }
+  | BoolTerm { b :: Boolean, ann :: ann }
+  | VarTerm { name :: Name, ann :: ann }
 
 derive instance genericTerm :: Generic (Term ann) _
 
+instance containerTerm :: Container Term where
+  open _ = unsafeCrashWith "TODO"
+  mapContainer f _ = unsafeCrashWith "TODO"
+
 instance showTerm :: Show ann => Show (Term ann) where
-  show x = genericShow x
+  show _ = unsafeCrashWith "TODO"
 
 instance prettyTerm :: Pretty (Term ann) where
-  pretty (NeuTerm neu) = neu.name ~ hcat neu.args
-  pretty (PrimTerm prim) = pretty prim
-
-data PrimTerm ann
-  = UnitPrimTerm ann
-  | BoolPrimTerm Boolean ann
-
-derive instance genericPrimTerm :: Generic (PrimTerm ann) _
-
-instance showPrimTerm :: Show ann => Show (PrimTerm ann) where
-  show x = genericShow x
-
-instance prettyPrimTerm :: Pretty (PrimTerm ann) where
-  pretty (UnitPrimTerm _) = pretty "unit"
-  pretty (BoolPrimTerm b _) = pretty if b then "true" else "false"
-
-varTerm :: forall ann. Name -> ann -> Term ann
-varTerm name ann = NeuTerm { name, args: [], ann }
-
-neuTerm :: forall ann. Name -> Array (Term ann) -> ann -> Term ann
-neuTerm name args ann = NeuTerm { name, args, ann }
-
-class IsTerm a ann where
-  toTerm :: a -> Term ann
+  pretty _ = unsafeCrashWith "TODO"
 
 -- | A __name__.
 newtype Name
@@ -205,6 +197,12 @@ newtype Name
 derive instance genericName :: Generic Name _
 
 derive instance newtypeName :: Newtype Name _
+
+instance eqName :: Eq Name where
+  eq x = genericEq x
+
+instance ordName :: Ord Name where
+  compare x = genericCompare x
 
 instance showName :: Show Name where
   show x = genericShow x
@@ -225,3 +223,15 @@ instance showLabel :: Show Label where
 
 instance prettyLabel :: Pretty Label where
   pretty (Label str) = pretty str
+
+-- | Lattice over well-sorted terms
+instance eqTermSort :: Eq (Term Sort) where
+  eq = unsafeCrashWith "TODO"
+
+instance partialOrdTermSort :: PartialOrd (Term Sort) where
+  comparePartial _ _ = unsafeCrashWith "TODO"
+  comparePartial tm1 tm2 = unsafeCrashWith $ "comparePartial: terms have different sorts" <> "\n  tm1 = " <> show tm1 <> "\n  tm2 = " <> show tm2
+
+instance latticeTermSort :: Lattice (Term Sort) where
+  join = unsafeCrashWith "TODO" -- :: Term Sort -> Term Sort -> Term Sort
+  meet = unsafeCrashWith "TODO" -- :: Term Sort -> Term Sort -> Term Sort

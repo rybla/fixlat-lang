@@ -365,3 +365,26 @@ rule
 
 
 
+## Lattice
+
+A  _lattice_ is a partially-ordered set that, for any finite subset, has a
+join (least upper bound) and a meet (greatest lower bound). A lattice has
+the following properties:
+
+```
+commutativity:
+  a ∨ b = b ∨ a
+  a ∧ b = b ∧ a
+
+associativity:
+  a ∨ (b ∨ c) = (a ∨ b) ∨ c
+  a ∧ (b ∧ c) = (a ∧ b) ∧ c
+
+absorbtion:
+  a ∨ (a ∧ b) = a
+  a ∧ (a ∨ b) = a
+
+idempotentcy:
+  a ∨ a = a
+  a ∧ a = a
+```

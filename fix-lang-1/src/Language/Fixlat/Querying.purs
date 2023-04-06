@@ -11,13 +11,13 @@ import Language.Fixlat.M as M
 type QueryingM
   = ReaderT QueryingCtx M.M
 
--- | The querying context. 
+-- | The querying context.
 -- | - `inferences` maps a precicate name to all of the rules that can produce
 -- |   an instance of that predicate.
 type QueryingCtx
-  = { predicates :: Name -> Predicate -- pred name => pred
-    , rules :: Name -> Rule Sort -- rule name => rule
-    , inferences :: Name -> Rule Sort -- pred name => rule
+  = { predicates :: Map.Map Name Predicate -- pred name => pred
+    , rules :: Map.Map Name (Rule Sort) -- rule name => rule
+    , inferences :: Map.Map Name (Rule Sort) -- pred name => rule
     , queries :: Array (Query Sort)
     }
 

@@ -99,5 +99,8 @@ braces a = "{" ~ a ~ "}"
 brackets :: forall a. Pretty a => a -> Grid
 brackets a = "[" ~ a ~ "]"
 
+ticks :: forall a. Pretty a => a -> Grid
+ticks a = "`" ~ a ~ "`"
+
 commas :: forall a. Pretty a => Array a -> Grid
 commas = intercalate (pretty ", ") <<< map pretty
