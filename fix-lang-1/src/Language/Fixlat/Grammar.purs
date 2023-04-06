@@ -195,6 +195,15 @@ varTerm name = NeuTerm { name, args: [] }
 neuTerm :: Name -> Array Term -> Term
 neuTerm name args = NeuTerm { name, args }
 
+class IsTerm a where
+  toTerm :: a -> Term
+
+instance isTermUnit :: IsTerm Unit where
+  toTerm _ = PrimTerm UnitPrimTerm
+
+instance isTermBool :: IsTerm Boolean where
+  toTerm = PrimTerm <<< BoolPrimTerm
+
 -- | A __name__.
 newtype Name
   = Name String
