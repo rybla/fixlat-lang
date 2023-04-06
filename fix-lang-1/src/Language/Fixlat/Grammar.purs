@@ -11,18 +11,18 @@ import Pretty
 import Utility
 import Data.Enum (enumFromTo)
 
-newtype Module
+newtype Module ann
   = Module
   { label :: Label
-  , statements :: Array Statement
+  , statements :: Array (Statement ann)
   }
 
-derive instance genericModule :: Generic Module _
+derive instance genericModule :: Generic (Module ann) _
 
-instance showModule :: Show Module where
+instance showModule :: Show ann => Show (Module ann) where
   show x = genericShow x
 
-instance prettyModule :: Pretty Module where
+instance prettyModule :: Pretty (Module ann) where
   pretty (Module mdl) =
     vcat
       [ "module" ~ mdl.label ~ ":"
@@ -30,17 +30,17 @@ instance prettyModule :: Pretty Module where
       ]
 
 -- | A top-level __statement__.
-data Statement
+data Statement ann
   = PredicateStatement Predicate
-  | RuleStatement Rule
-  | QueryStatement Query
+  | RuleStatement (Rule ann)
+  | QueryStatement (Query ann)
 
-derive instance genericStatement :: Generic Statement _
+derive instance genericStatement :: Generic (Statement ann) _
 
-instance showStatement :: Show Statement where
+instance showStatement :: Show ann => Show (Statement ann) where
   show x = genericShow x
 
-instance prettyStatement :: Pretty Statement where
+instance prettyStatement :: Pretty (Statement ann) where
   pretty (PredicateStatement pred) = pretty pred
   pretty (RuleStatement rule) = pretty rule
   pretty (QueryStatement query) = pretty query
@@ -70,20 +70,20 @@ instance prettyPredicate :: Pretty Predicate where
         )
 
 -- | An inference __rule__ declaration.
-newtype Rule
+newtype Rule ann
   = Rule
   { label :: Label
   , params :: Array Name -- parameters (universally quantified)
-  , hyps :: Array Term --hypotheses
-  , cons :: Array Term -- conclusions
+  , hyps :: Array (Term ann) --hypotheses
+  , con :: Term ann -- conclusion
   }
 
-derive instance genericRule :: Generic Rule _
+derive instance genericRule :: Generic (Rule ann) _
 
-instance showRule :: Show Rule where
+instance showRule :: Show ann => Show (Rule ann) where
   show x = genericShow x
 
-instance prettyRule :: Pretty Rule where
+instance prettyRule :: Pretty (Rule ann) where
   pretty (Rule rule) =
     vcat
       [ "rule" ~ rule.label ~ ":"
@@ -91,24 +91,24 @@ instance prettyRule :: Pretty Rule where
       , indent <<< vcat
           $ [ vcat $ rule.hyps
             , pretty "----------------"
-            , vcat $ rule.cons
+            , pretty rule.con
             ]
       ]
 
 -- | A __query__.
-newtype Query
+newtype Query ann
   = Query
   { params :: Array Name -- parameters (universally quantified)
-  , hyps :: Array Term --hypotheses
-  , cons :: Array Term -- conclusions
+  , hyps :: Array (Term ann) --hypotheses
+  , cons :: Array (Term ann) -- conclusions
   }
 
-derive instance genericQuery :: Generic Query _
+derive instance genericQuery :: Generic (Query ann) _
 
-instance showQuery :: Show Query where
+instance showQuery :: Show ann => Show (Query ann) where
   show x = genericShow x
 
-instance prettyQuery :: Pretty Query where
+instance prettyQuery :: Pretty (Query ann) where
   pretty (Query query) =
     vcat
       [ "query"
@@ -122,22 +122,22 @@ instance prettyQuery :: Pretty Query where
       ]
 
 -- | A __proposition__. _Can_ have quantifications.
-data Prop
-  = TermProp Term
-  | ForallProp { name :: Name, prop :: Prop }
-  | ExistsProp { name :: Name, prop :: Prop }
+data Prop ann
+  = TermProp (Term ann)
+  | ForallProp { name :: Name, prop :: Prop ann }
+  | ExistsProp { name :: Name, prop :: Prop ann }
 
-derive instance genericProp :: Generic Prop _
+derive instance genericProp :: Generic (Prop ann) _
 
-instance showProp :: Show Prop where
+instance showProp :: Show ann => Show (Prop ann) where
   show x = genericShow x
 
-instance prettyProp :: Pretty Prop where
+instance prettyProp :: Pretty (Prop ann) where
   pretty (TermProp ex) = pretty ex
   pretty (ForallProp all) = "∀" ~ all.name ~ "." ~ all.prop
   pretty (ExistsProp exi) = "∃" ~ exi.name ~ "." ~ exi.prop
 
--- | A __sort__.
+-- | A __sort__. Every sort has a lattice structure defined over it.
 data Sort
   = PrimSort PrimSort
 
@@ -163,46 +163,40 @@ instance prettyPrimSort :: Pretty PrimSort where
   pretty BoolPrimSort = pretty "Bool"
 
 -- | A __term__. _Cannot_ have quantifications.
-data Term
-  = NeuTerm { name :: Name, args :: Array Term }
-  | PrimTerm PrimTerm
+data Term ann
+  = NeuTerm { name :: Name, args :: Array (Term ann), ann :: ann }
+  | PrimTerm (PrimTerm ann)
 
-derive instance genericTerm :: Generic Term _
+derive instance genericTerm :: Generic (Term ann) _
 
-instance showTerm :: Show Term where
+instance showTerm :: Show ann => Show (Term ann) where
   show x = genericShow x
 
-instance prettyTerm :: Pretty Term where
+instance prettyTerm :: Pretty (Term ann) where
   pretty (NeuTerm neu) = neu.name ~ hcat neu.args
   pretty (PrimTerm prim) = pretty prim
 
-data PrimTerm
-  = UnitPrimTerm
-  | BoolPrimTerm Boolean
+data PrimTerm ann
+  = UnitPrimTerm ann
+  | BoolPrimTerm Boolean ann
 
-derive instance genericPrimTerm :: Generic PrimTerm _
+derive instance genericPrimTerm :: Generic (PrimTerm ann) _
 
-instance showPrimTerm :: Show PrimTerm where
+instance showPrimTerm :: Show ann => Show (PrimTerm ann) where
   show x = genericShow x
 
-instance prettyPrimTerm :: Pretty PrimTerm where
-  pretty UnitPrimTerm = pretty "unit"
-  pretty (BoolPrimTerm b) = pretty if b then "true" else "false"
+instance prettyPrimTerm :: Pretty (PrimTerm ann) where
+  pretty (UnitPrimTerm _) = pretty "unit"
+  pretty (BoolPrimTerm b _) = pretty if b then "true" else "false"
 
-varTerm :: Name -> Term
-varTerm name = NeuTerm { name, args: [] }
+varTerm :: forall ann. Name -> ann -> Term ann
+varTerm name ann = NeuTerm { name, args: [], ann }
 
-neuTerm :: Name -> Array Term -> Term
-neuTerm name args = NeuTerm { name, args }
+neuTerm :: forall ann. Name -> Array (Term ann) -> ann -> Term ann
+neuTerm name args ann = NeuTerm { name, args, ann }
 
-class IsTerm a where
-  toTerm :: a -> Term
-
-instance isTermUnit :: IsTerm Unit where
-  toTerm _ = PrimTerm UnitPrimTerm
-
-instance isTermBool :: IsTerm Boolean where
-  toTerm = PrimTerm <<< BoolPrimTerm
+class IsTerm a ann where
+  toTerm :: a -> Term ann
 
 -- | A __name__.
 newtype Name

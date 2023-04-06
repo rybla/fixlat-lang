@@ -20,8 +20,10 @@ to generate this file without the comments in this block.
   , "lists"
   , "maybe"
   , "newtype"
+  , "ordered-collections"
   , "partial"
   , "prelude"
+  , "transformers"
   , "tuples"
   ]
 , packages = ./packages.dhall
