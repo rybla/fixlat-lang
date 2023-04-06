@@ -8,4 +8,4 @@
 /.purs*
 /.psa*
 /.spago
-.code-workspace
+**/*.code-workspace
