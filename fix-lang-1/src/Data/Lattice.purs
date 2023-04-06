@@ -3,8 +3,7 @@ module Data.Lattice where
 import Prelude hiding (join)
 import Data.Maybe
 
-class
-  Eq a <= PartialOrd a where
+class PartialOrd a where
   comparePartial :: a -> a -> Maybe Ordering
 
 -- | Test whether one value is _strictly less than_ another.

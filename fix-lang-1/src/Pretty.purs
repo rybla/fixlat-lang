@@ -12,11 +12,20 @@ import Data.Newtype
 class Pretty a where
   pretty :: a -> Grid
 
+prettyShow :: forall a. Show a => a -> Grid
+prettyShow = pretty <<< show
+
 instance prettyString :: Pretty String where
   pretty str = Grid [ [ str ] ]
 
+instance prettyUnit :: Pretty Unit where
+  pretty = pretty <<< show
+
+instance prettyBoolean :: Pretty Boolean where
+  pretty = pretty <<< show
+
 instance prettyInt :: Pretty Int where
-  pretty int = pretty (show int)
+  pretty = pretty <<< show
 
 instance prettyArray :: Pretty a => Pretty (Array a) where
   pretty = commas
@@ -101,6 +110,9 @@ brackets a = "[" ~ a ~ "]"
 
 ticks :: forall a. Pretty a => a -> Grid
 ticks a = "`" ~ a ~ "`"
+
+angles :: forall a. Pretty a => a -> Grid
+angles a = "⟨" ~ a ~ "⟩"
 
 commas :: forall a. Pretty a => Array a -> Grid
 commas = intercalate (pretty ", ") <<< map pretty
