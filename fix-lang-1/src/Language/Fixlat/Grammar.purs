@@ -15,7 +15,7 @@ import Data.Show.Generic
 import Data.Traversable
 import Data.Tuple
 import Data.Tuple.Nested
-import Prelude
+import Prelude hiding (join)
 import Pretty
 import Utility
 import Bug (throwBug)
@@ -257,10 +257,12 @@ instance showLabel :: Show Label where
 instance prettyLabel :: Pretty Label where
   pretty (Label str) = pretty str
 
--- | Lattice over well-sorted terms.
+-- | Partial ordering over (open) `Term Sort`. If `a <= b`
 -- | 
--- | First, unify terms. Then, do nested comaprison. Inequal free variables are
--- | considered incomparable.
+-- | 1. Attempt to unify terms. Ununifiable terms are incomparable.
+-- | 2. Nested comparison of terms, where
+-- |   - inequal free variables are incomparable
+-- |   - tuples have special `TupleOrdering`
 instance partialOrdTermSort :: PartialOrd (Term Sort) where
   comparePartial term1 term2 = do
     sigma <- unifyTerms term1 term2
@@ -270,27 +272,27 @@ instance partialOrdTermSort :: PartialOrd (Term Sort) where
       term2' = substTerm sigma term2
 
       sr = open term1'
-    go1 sr term1' term2'
+    comparePartial' sr term1' term2'
     where
-    go1 _sr (VarTerm v1) (VarTerm v2)
+    comparePartial' _sr (VarTerm v1) (VarTerm v2)
       | v1.name == v2.name = pure EQ
 
-    go1 UnitSort (UnitTerm u1) (UnitTerm u2) = pure $ compare u1.unit u2.unit
+    comparePartial' UnitSort (UnitTerm u1) (UnitTerm u2) = pure $ compare u1.unit u2.unit
 
-    go1 BoolSort (BoolTerm b1) (BoolTerm b2) = pure $ compare b1.bool b2.bool
+    comparePartial' BoolSort (BoolTerm b1) (BoolTerm b2) = pure $ compare b1.bool b2.bool
 
-    go1 (TupleSort tup) (TupleTerm tup1) (TupleTerm tup2) = case tup.mb_ord of
+    comparePartial' (TupleSort tup) (TupleTerm tup1) (TupleTerm tup2) = case tup.mb_ord of
       Just LexicographicTupleOrdering -> do
         Array.foldM
           ( case _ of
-              EQ -> \(sr /\ (tm1 /\ tm2)) -> go1 sr tm1 tm2
+              EQ -> \(sr /\ (tm1 /\ tm2)) -> comparePartial' sr tm1 tm2
               o -> const (pure o)
           )
           EQ
           (tup.components `Array.zip` (tup1.components `Array.zip` tup2.components))
       Nothing -> unsafeCrashWith $ "comparePartial: uninstantiated tuple ordering sort:" <> "\n  sr = " <> show (TupleSort tup) <> "\n  tup1 = " <> show (TupleTerm tup1) <> "\n  tup2 = " <> show (TupleTerm tup2)
 
-    go1 _sr _tm1 _tm2' = empty
+    comparePartial' _sr _tm1 _tm2' = empty
 
     substTerm :: forall a. Map.Map Name (Term a) -> Term a -> Term a
     substTerm sigma (VarTerm v) = fromMaybe (VarTerm v) (Map.lookup v.name sigma)
@@ -303,25 +305,25 @@ instance partialOrdTermSort :: PartialOrd (Term Sort) where
     unifySorts sr1 sr2 = sr1 == sr2
 
     unifyTerms :: Term Sort -> Term Sort -> Maybe (Map.Map Name (Term Sort))
-    unifyTerms term1 term2 = execStateT (go2 term1 term2) Map.empty
+    unifyTerms term1' term2' = execStateT (unifyTerms' term1' term2') Map.empty
       where
-      go2 tm1 tm2
-        | unifySorts (open tm1) (open tm2) = go3 tm1 tm2
+      unifyTerms' tm1 tm2
+        | unifySorts (open tm1) (open tm2) = unifyTerms'' tm1 tm2
         | otherwise = throwBug "unifyTerms" $ "attempted to unify terms with different sorts:" <> "\n  tm1 = " <> show tm1 <> "\n  tm2 = " <> show tm2
 
-      go3 (VarTerm v1) tm2 = subst v1.name tm2
+      unifyTerms'' (VarTerm v1) tm2 = subst v1.name tm2
 
-      go3 tm1 (VarTerm v2) = subst v2.name tm1
+      unifyTerms'' tm1 (VarTerm v2) = subst v2.name tm1
 
-      go3 (UnitTerm u1) (UnitTerm u2)
+      unifyTerms'' (UnitTerm u1) (UnitTerm u2)
         | u1.unit == u2.unit = pure unit
 
-      go3 (BoolTerm b1) (BoolTerm b2)
+      unifyTerms'' (BoolTerm b1) (BoolTerm b2)
         | b1.bool == b2.bool = pure unit
 
-      go3 (TupleTerm tup1) (TupleTerm tup2) = for_ (tup1.components `Array.zip` tup2.components) (uncurry go2)
+      unifyTerms'' (TupleTerm tup1) (TupleTerm tup2) = for_ (tup1.components `Array.zip` tup2.components) (uncurry unifyTerms')
 
-      go3 _ _ = mempty
+      unifyTerms'' _ _ = mempty
 
       subst x tm = modify_ $ Map.insert x tm
 
@@ -333,6 +335,8 @@ instance partialOrdTermSort :: PartialOrd (Term Sort) where
 
       occurs x (TupleTerm tup) = any (occurs x) tup.components
 
+-- | The partial ordering over `Term Sort` gives rise to a lattice over `Term
+-- | Sort` as well via `partialOrdLattice`.
 instance latticeTermSort :: Lattice (Term Sort) where
-  join = unsafeCrashWith "TODO" -- :: Term Sort -> Term Sort -> Term Sort
-  meet = unsafeCrashWith "TODO" -- :: Term Sort -> Term Sort -> Term Sort
+  join a b = unwrap <$> join (PartialOrdLattice a) (PartialOrdLattice b)
+  meet a b = unwrap <$> join (PartialOrdLattice a) (PartialOrdLattice b)

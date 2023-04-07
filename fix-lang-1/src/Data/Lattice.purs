@@ -1,8 +1,21 @@
 module Data.Lattice where
 
-import Prelude hiding (join)
 import Data.Maybe
+import Prelude hiding (join)
+import Utility
+import Data.Newtype
 
+-- | A partial ordering satisfies the following properties:
+-- | ```
+-- | reflexivity: 
+-- |   a <= a
+-- | 
+-- | antisymmetry:
+-- |   a <= b  and  b <= a  ==>  a = b
+-- | 
+-- | transitivity:
+-- |   a <= b  and  b <= c  ==>  a <= c
+-- | ```
 class PartialOrd a where
   comparePartial :: a -> a -> Maybe Ordering
 
@@ -66,16 +79,30 @@ infixl 4 greaterThanOrEq as >=?
 -- | idempotentcy:
 -- |   a ∨ a = a
 -- |   a ∧ a = a
--- |
--- | a <= b  <==>  a = a ∧ b
--- | a <= b  <==>  b = a ∨ b
--- | a = a ∧ b  ==>  b ∧ (b ∨ a) = (a ∨ b) ∧ b = a ∧ b
 -- | ```
-class
-  PartialOrd a <= Lattice a where
-  join :: a -> a -> a
-  meet :: a -> a -> a
+class Lattice a where
+  join :: a -> a -> Maybe a
+  meet :: a -> a -> Maybe a
 
 infixr 3 join as ∧
 
 infixr 3 meet as ∨
+
+-- | A partial ordering gives rise to a lattice if the following properties are
+-- | satisfied:
+-- | ```
+-- | a <= b  <==>  a ∧ b = a
+-- | a <= b  <==>  a ∨ b = b
+-- |
+-- | a = a ∧ b  ==>  b ∧ (b ∨ a) = (a ∨ b) ∧ b = a ∧ b
+-- | ````
+newtype PartialOrdLattice a
+  = PartialOrdLattice a
+
+instance partialOrdLattice :: PartialOrd a => Lattice (PartialOrdLattice a) where
+  -- a <= b  ==>  a ∧ b = a
+  -- b <= a  ==>  a ∧ b = b
+  join (PartialOrdLattice a) (PartialOrdLattice b) = PartialOrdLattice <$> if_ a b <$> (a <=? b)
+  -- a <= b  ==>  a ∨ b = b
+  -- b <= a  ==>  a ∨ b = a
+  meet (PartialOrdLattice a) (PartialOrdLattice b) = PartialOrdLattice <<< if_ b a <$> (a <=? b)
