@@ -20,44 +20,44 @@ class PartialOrd a where
   comparePartial :: a -> a -> Maybe Ordering
 
 -- | Test whether one value is _strictly less than_ another.
-lessThan :: forall a. PartialOrd a => a -> a -> Maybe Boolean
-lessThan a1 a2 =
+lessThanPartial :: forall a. PartialOrd a => a -> a -> Maybe Boolean
+lessThanPartial a1 a2 =
   a1 `comparePartial` a2
     <#> case _ of
         LT -> true
         _ -> false
 
 -- | Test whether one value is _strictly greater than_ another.
-greaterThan :: forall a. PartialOrd a => a -> a -> Maybe Boolean
-greaterThan a1 a2 =
+greaterThanPartial :: forall a. PartialOrd a => a -> a -> Maybe Boolean
+greaterThanPartial a1 a2 =
   a1 `comparePartial` a2
     <#> case _ of
         GT -> true
         _ -> false
 
 -- | Test whether one value is _non-strictly less than_ another.
-lessThanOrEq :: forall a. PartialOrd a => a -> a -> Maybe Boolean
-lessThanOrEq a1 a2 =
+lessThanOrEqPartial :: forall a. PartialOrd a => a -> a -> Maybe Boolean
+lessThanOrEqPartial a1 a2 =
   a1 `comparePartial` a2
     <#> case _ of
         GT -> false
         _ -> true
 
 -- | Test whether one value is _non-strictly greater than_ another.
-greaterThanOrEq :: forall a. PartialOrd a => a -> a -> Maybe Boolean
-greaterThanOrEq a1 a2 =
+greaterThanOrEqPartial :: forall a. PartialOrd a => a -> a -> Maybe Boolean
+greaterThanOrEqPartial a1 a2 =
   a1 `comparePartial` a2
     <#> case _ of
         LT -> false
         _ -> true
 
-infixl 4 lessThan as <?
+infixl 4 lessThanPartial as <?
 
-infixl 4 lessThanOrEq as <=?
+infixl 4 lessThanOrEqPartial as <=?
 
-infixl 4 greaterThan as >?
+infixl 4 greaterThanPartial as >?
 
-infixl 4 greaterThanOrEq as >=?
+infixl 4 greaterThanOrEqPartial as >=?
 
 -- | A  _lattice_ is a partially-ordered set that, for any finite subset, has a
 -- | join (least upper bound) and a meet (greatest lower bound). A lattice has
@@ -98,6 +98,8 @@ infixr 3 meet as ∨
 -- | ````
 newtype PartialOrdLattice a
   = PartialOrdLattice a
+
+derive instance newtypePartialOrdLattice :: Newtype (PartialOrdLattice a) _
 
 instance partialOrdLattice :: PartialOrd a => Lattice (PartialOrdLattice a) where
   -- a <= b  ==>  a ∧ b = a

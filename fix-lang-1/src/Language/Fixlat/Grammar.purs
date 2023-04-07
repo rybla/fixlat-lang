@@ -45,7 +45,7 @@ instance prettyModule :: Pretty (Module ann) where
       , vcat $ ("" \~ _) <<< pretty <$> mdl.statements
       ]
 
--- | A top-level `Statement`.
+-- | A `Statement` is a top-level statement in a module.
 data Statement ann
   = PredicateStatement Predicate
   | RuleStatement (Rule ann)
@@ -61,7 +61,7 @@ instance prettyStatement :: Pretty (Statement ann) where
   pretty (RuleStatement rule) = pretty rule
   pretty (QueryStatement query) = pretty query
 
--- | A top-level `Predicate` declaration.
+-- | A `Predicate` is a top-level predicate declaration.
 newtype Predicate
   = Predicate
   { label :: String
@@ -80,7 +80,7 @@ instance prettyPredicate :: Pretty Predicate where
       ~ pred.name
       ~ braces (pred.param.name ~ "," ~ pred.param.sort)
 
--- | An top-level inference `Rule` declaration.
+-- | A `Rule` is a top-level inference rule declaration.
 newtype Rule ann
   = Rule
   { label :: Label
@@ -106,7 +106,7 @@ instance prettyRule :: Pretty (Rule ann) where
             ]
       ]
 
--- | A top-level `Query`.
+-- | A `Query` is a top-level query.
 newtype Query ann
   = Query
   { params :: Array Name -- parameters (universally quantified)
@@ -151,7 +151,8 @@ instance prettySort :: Pretty Sort where
   pretty BoolSort = pretty "Bool"
   pretty (TupleSort tup) = maybe (pretty "<<Nothing>>") pretty tup.mb_ord ~ angles (commas tup.components)
 
--- | Ways to derive lattice ordering over a tuple.
+-- | A `TupleOrdering` corresponds to a way to derive a lattice ordering over a
+-- | tuple from the lattice orderings over its components.
 data TupleOrdering
   = LexicographicTupleOrdering
 
@@ -182,7 +183,7 @@ instance prettyQualProp :: Pretty (QualProp ann) where
   pretty (ForallProp all) = "∀" ~ all.name ~ "." ~ all.prop
   pretty (ExistsProp exi) = "∃" ~ exi.name ~ "." ~ exi.prop
 
--- | An unqualified `Prop`osition.
+-- | A `Prop` corresponds to an unqualified __proposition__.
 data Prop ann
   = Prop { name :: Name, arg :: Term ann }
 
@@ -259,8 +260,8 @@ instance prettyLabel :: Pretty Label where
 
 -- | Partial ordering over (open) `Term Sort`. If `a <= b`
 -- | 
--- | 1. Attempt to unify terms. Ununifiable terms are incomparable.
--- | 2. Nested comparison of terms, where
+-- | - Attempt to unify terms. Ununifiable terms are incomparable.
+-- | - Nested comparison of terms, where
 -- |   - inequal free variables are incomparable
 -- |   - tuples have special `TupleOrdering`
 instance partialOrdTermSort :: PartialOrd (Term Sort) where

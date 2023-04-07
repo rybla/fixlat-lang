@@ -1,3 +1,4 @@
+-- | Hello world
 module Language.Fixlat.Querying where
 
 import Language.Fixlat.Grammar
