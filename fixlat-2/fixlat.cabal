@@ -77,7 +77,8 @@ library
       mtl,
       transformers,
       lens,
-      list-t
+      list-t,
+      prettyprinter
 
     -- Directories containing source files.
     hs-source-dirs:   src

@@ -1,6 +1,9 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use newtype instead of data" #-}
 
 module Language.Fixlat.Querying (submitQuery) where
 
@@ -20,24 +23,24 @@ import qualified ListT
 type QueryingM = ReaderT QueryingCtx (ListT.ListT (StateT QueryingEnv (ExceptT String M.M)))
 
 data QueryingCtx = QueryingCtx
-  { ctxPredicates :: Map.Map Name (Predicate Type),
-    ctxRules :: Map.Map Name (Rule Type)
+  { ctxPredicates :: Map.Map PredName (Predicate (Type Lat)),
+    ctxRules :: Map.Map PredName (Rule Lat (Type Lat))
   }
 
 -- add all preds
 -- add all rules
-initQueryingCtx :: Module Type -> M.M QueryingCtx
+initQueryingCtx :: Module Lat (Type Lat) -> M.M QueryingCtx
 initQueryingCtx = error "!TODO initQueryingCtx"
 
 data QueryingEnv = QueryingEnv
-  { envKnowledges :: Map.Map Name Knowledge -- pred name => pred knowledge
+  { envKnowledges :: Map.Map PredName Knowledge -- pred name => pred knowledge
   }
 
 -- init knowledge for each pred
-initQueryingEnv :: Module Type -> M.M QueryingEnv
+initQueryingEnv :: Module Lat (Type Lat) -> M.M QueryingEnv
 initQueryingEnv = error "!TODO initQueryingEnv"
 
-lookupPredicateKnowledge :: Name -> QueryingM Knowledge
+lookupPredicateKnowledge :: PredName -> QueryingM Knowledge
 lookupPredicateKnowledge x =
   gets (envKnowledges >>> Map.lookup x) >>= \case
     Nothing -> throwError $ "unknown predicate name:" ++ show x
@@ -50,19 +53,19 @@ lookupPredicateKnowledge x =
 -- - `r <= lookup (insert r knw)`
 data Knowledge
 
-insertRule :: Rule Type -> Knowledge -> Knowledge
+insertRule :: Rule Lat (Type Lat) -> Knowledge -> Knowledge
 insertRule = error "!TODO insertKnowledge"
 
 -- | Lookup all rules that can (immediately) infer this rule.
-lookupRuleRules :: Knowledge -> Rule Type -> [Rule Type]
+lookupRuleRules :: Knowledge -> Rule Lat (Type Lat) -> [Rule Lat (Type Lat)]
 lookupRuleRules = error "!TODO lookupKnowledge"
 
 -- Lookup all rules that can (immediately) infer this prop.
-lookupPropRules :: Knowledge -> Prop Type -> [Rule Type]
+lookupPropRules :: Knowledge -> Prop (Type Lat) -> [Rule Lat (Type Lat)]
 lookupPropRules = error "!TODO lookupProp"
 
 -- | Submitting a query.
-submitQuery :: Module Type -> Rule Type -> M.M (Either String [Proof])
+submitQuery :: Module Lat (Type Lat) -> Rule Lat (Type Lat) -> M.M (Either String [Proof])
 submitQuery mdl r = do
   env <- initQueryingEnv mdl
   ctx <- initQueryingCtx mdl
@@ -74,17 +77,17 @@ submitQuery mdl r = do
   m4
 
 -- | Query a rule.
-queryRule :: Rule Type -> QueryingM Proof
+queryRule :: Rule Lat (Type Lat) -> QueryingM Proof
 queryRule Rule {..} = do
   -- !TODO handle ruleHyps
   queryProp ruleCon
 
 -- | Query a proposition.
-queryProp :: Prop Type -> QueryingM Proof
+queryProp :: Prop (Type Lat) -> QueryingM Proof
 -- look for any rules in the knowledge of this predicate that can infer the goal
 -- prop; for each of these rules, query their hypotheses for those proofs, then
 -- use the fully instantiated rule as a step in the proof
-queryProp prop@(PredicateProp x _) = do
+queryProp prop@(PredProp x _) = do
   kwn <- lookupPredicateKnowledge x
   let rs = lookupPropRules kwn prop
   pfs <- forM rs \r -> do
