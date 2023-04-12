@@ -10,4 +10,4 @@ generated-docs/
 .spago
 *.code-workspace
 *~
-
+*.#*
