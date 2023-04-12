@@ -41,6 +41,7 @@ Syntax sugar:
 ```
 <term> ::=
   | <atomic-term>
+  | <term-name>
   | {<fld-name> = <term>, <term>} | {<fld-name> = <term>}
   | <ctr-name>[<term>]
 ```
