@@ -1,12 +1,16 @@
 -- | Syntax types for language.
 -- |
--- | Limitations:
+-- | Temporary limitations:
 -- | - no user-defined data; everything is primitive
+-- | - only universal quantification
 module Language.Fixlat.Grammar where
 
 import Container
+import Control.Alternative
 import Control.Monad.Maybe.Trans
 import Control.Monad.State
+import Control.Plus
+import Data.Enum
 import Data.Generic.Rep
 import Data.Lattice
 import Data.Maybe
@@ -19,9 +23,7 @@ import Prelude hiding (join)
 import Pretty
 import Utility
 import Bug (throwBug)
-import Control.Plus (empty)
 import Data.Array as Array
-import Data.Enum (enumFromTo)
 import Data.Eq.Generic (genericEq)
 import Data.Map as Map
 import Data.Ord.Generic (genericCompare)
@@ -106,11 +108,14 @@ instance prettyRule :: Pretty (Rule ann) where
             ]
       ]
 
+instance partialOrdRuleSort :: PartialOrd (Rule Sort) where
+  comparePartial (Rule rule1) (Rule rule2) = unsafeCrashWith "partialOrdRuleSort.comparePartial"
+
 -- | A `Query` is a top-level query.
 newtype Query ann
   = Query
   { params :: Array Name -- parameters (universally quantified)
-  , hyps :: Array (Term ann) --hypotheses
+  , hyps :: Array (Term ann) -- hypotheses
   , con :: Term ann -- conclusion
   }
 
@@ -167,11 +172,14 @@ instance showTupleOrdering :: Show TupleOrdering where
 instance prettyTupleOrdering :: Pretty TupleOrdering where
   pretty LexicographicTupleOrdering = pretty "Lexicographic"
 
+{- !TODO intro this feature later
+
 -- | A __qualified proposition__.
 data QualProp ann
-  = UnqualProp (Prop ann)
-  | ForallProp { name :: Name, prop :: Prop ann }
-  | ExistsProp { name :: Name, prop :: Prop ann }
+  = QualProp
+    { params :: Array { name :: Name, sort :: Sort }
+    , prop :: Prop ann
+    }
 
 derive instance genericQualProp :: Generic (QualProp ann) _
 
@@ -179,10 +187,20 @@ instance showQualProp :: Show ann => Show (QualProp ann) where
   show x = genericShow x
 
 instance prettyQualProp :: Pretty (QualProp ann) where
-  pretty (UnqualProp prop) = pretty prop
-  pretty (ForallProp all) = "∀" ~ all.name ~ "." ~ all.prop
-  pretty (ExistsProp exi) = "∃" ~ exi.name ~ "." ~ exi.prop
+  pretty (QualProp qp)
+    | Array.null qp.params = pretty qp.prop
+    | otherwise =
+      "∀" ~ hcat (qp.params <#> \param -> param.name ~ ":" ~ param.sort)
+        ~ "."
+        ~ qp.prop
 
+instance partialOrdQualPropSort :: PartialOrd (QualProp Sort) where
+  comparePartial (QualProp qp1) (QualProp qp2) = comparePartial qp1.prop qp2.prop
+
+instance latticeQualPropSort :: Lattice (QualProp Sort) where
+  join qp1 qp2 = unwrap <$> join (PartialOrdLattice qp1) (PartialOrdLattice qp2)
+  meet qp1 qp2 = unwrap <$> meet (PartialOrdLattice qp1) (PartialOrdLattice qp2)
+-}
 -- | A `Prop` corresponds to an unqualified __proposition__.
 data Prop ann
   = Prop { name :: Name, arg :: Term ann }
@@ -194,6 +212,15 @@ instance showProp :: Show ann => Show (Prop ann) where
 
 instance prettyProp :: Pretty (Prop ann) where
   pretty (Prop prop) = prop.name ~ braces prop.arg
+
+instance partialOrdPropSort :: PartialOrd (Prop Sort) where
+  comparePartial (Prop prop1) (Prop prop2) = do
+    guard $ prop1.name == prop2.name
+    comparePartial prop1.arg prop2.arg
+
+instance latticePropSort :: Lattice (Prop Sort) where
+  join prop1 prop2 = unwrap <$> join (PartialOrdLattice prop1) (PartialOrdLattice prop2)
+  meet prop1 prop2 = unwrap <$> meet (PartialOrdLattice prop1) (PartialOrdLattice prop2)
 
 -- | A `Term` corresponds to an instance of data. A `Prop` cannot appear inside
 -- | a `Term`, but a `Term` can appear inside a `Prop`.
@@ -291,7 +318,7 @@ instance partialOrdTermSort :: PartialOrd (Term Sort) where
           )
           EQ
           (tup.components `Array.zip` (tup1.components `Array.zip` tup2.components))
-      Nothing -> unsafeCrashWith $ "comparePartial: uninstantiated tuple ordering sort:" <> "\n  sr = " <> show (TupleSort tup) <> "\n  tup1 = " <> show (TupleTerm tup1) <> "\n  tup2 = " <> show (TupleTerm tup2)
+      Nothing -> throwBug "partialOrdTermSort.comparePartial" $ "uninstantiated tuple ordering sort:" <> "\n  sr = " <> show (TupleSort tup) <> "\n  tup1 = " <> show (TupleTerm tup1) <> "\n  tup2 = " <> show (TupleTerm tup2)
 
     comparePartial' _sr _tm1 _tm2' = empty
 

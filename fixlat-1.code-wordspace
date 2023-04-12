@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "fix-lang-1"
+		},
+		{
+			"path": "notes"
+		}
+	],
+	"settings": {
+		"editor.formatOnSave": true,
+		"editor.wordWrap": "on"
+	}
+}
