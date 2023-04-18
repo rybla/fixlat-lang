@@ -1,9 +1,8 @@
 module Language.Fixlat.Grammar where
 
 import Data.Variant
-import Prelude
+import Prelude (class Functor)
 import Prim hiding (Type)
-
 import Data.Bifoldable (class Bifoldable)
 import Data.Bifunctor (class Bifunctor)
 import Data.Bitraversable (class Bitraversable)
