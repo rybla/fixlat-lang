@@ -6,7 +6,7 @@ import Data.Functor
 
 -- In this project, we are typically _lattice-climbing_, which implies:
 -- - "higher" points implies "lower" points
--- - the "join" of two points is the point that "lowest" point that implies both
+-- - the "join" of two points is the "lowest" point that implies both
 -- - the "meet" of two points is the "highest" point that is implied by both
 -- - the "top" of the lattice is logical bottom (implies everything)
 -- - the "bottom" of the lattice is logical top (only implies tautologies)
