@@ -59,16 +59,33 @@ where the rule that can be substituted to get the other rule is stronger/greater
 
 ## Querying Algorithm
 
-The environment, `env`, statefully keeps track of all the known rules. `env` is
-initialized with all the rules postulated in a module.
+**State**.
+The state is initialized with a lattice-set of rules.
 
-**Learn a rule**.
+**Orderings over rules**. The lattice-set of rules in the state keeps track of
+only to _highest_ (strongest) rules in the rule lattice. There is also
+a weaker ordering over rules which determined the order of priority to use them
+during querying. This order is 
 
-Learn a rule `r` by inserting it into `env` such that, for any comparable rule
-`r'` that is already in `env`, update `env` to only have `r \/ r'`.
+### Querying a rule
 
-**Query a rule**.
+The queried rule has the form.
 
-**Query a prop**. 
+```
+// Q_i : Quant
+// x_i : Var
+// hyp_j : CProp
+// con : CProp
 
+R_query : ... Q_i x_i ... .
+	... hyp_j ...
+	----------------
+	con
+```
+
+First, **generalize** the rule.
+- convert the bound rule parameters into bound metavariables
+- 
+
+### Example
 
