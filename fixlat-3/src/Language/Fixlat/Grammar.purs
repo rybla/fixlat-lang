@@ -67,7 +67,7 @@ newtype Rule y xt = Rule
 type TRule l = Rule (Type l CX) -- typed
 type LRule = TRule (Lat CX) -- latticed
 type CRule = LRule CX -- concrete
--- type MRule = LRule MX -- meta
+type MRule = LRule MX -- meta
 
 derive instance Newtype (Rule y xt) _
 derive instance Bifunctor Rule 
