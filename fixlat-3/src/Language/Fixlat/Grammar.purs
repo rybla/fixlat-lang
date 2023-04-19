@@ -59,16 +59,15 @@ type Pred =
 
 -- | Inference Rule
 newtype Rule y xt = Rule
-  { label :: Label 
-  , bind :: CX
-  , quantParams :: QuantParam xt
+  { label :: Label
+  , quantParams :: Array (QuantParam xt)
   , hyps :: Array (Prop y xt)
   , con :: Prop y xt
   }
 type TRule l = Rule (Type l CX) -- typed
 type LRule = TRule (Lat CX) -- latticed
 type CRule = LRule CX -- concrete
-type MRule = LRule MX -- meta
+-- type MRule = LRule MX -- meta
 
 derive instance Newtype (Rule y xt) _
 derive instance Bifunctor Rule 
@@ -80,10 +79,11 @@ instance MeetSemilattice CRule where meet = unsafeThrow "!TODO MeetSemilattice C
 instance JoinSemilattice CRule where join = unsafeThrow "!TODO JoinSemilattice CRule"
 instance Lattice CRule
 
-instance PartialOrd MRule where comparePartial = unsafeThrow "!TODO PartialOrd MRule"
-instance MeetSemilattice MRule where meet = unsafeThrow "!TODO MeetSemilattice MRule"
-instance JoinSemilattice MRule where join = unsafeThrow "!TODO JoinSemilattice MRule"
-instance Lattice MRule
+-- !TODO when/if will i need this?
+-- instance PartialOrd MRule where comparePartial = unsafeThrow "!TODO PartialOrd MRule"
+-- instance MeetSemilattice MRule where meet = unsafeThrow "!TODO MeetSemilattice MRule"
+-- instance JoinSemilattice MRule where join = unsafeThrow "!TODO JoinSemilattice MRule"
+-- instance Lattice MRule
 
 -- | A parameter is named and typed.
 type QuantParam xt = { bind :: xt, type_ :: Type (Lat CX) CX }
@@ -100,6 +100,14 @@ type Prop y xt = { bind :: CX, arg :: Term y xt }
 type TProp xt = Prop (Type (Lat CX) CX) xt
 type CProp = TProp CX
 type MProp = TProp MX
+
+fromPropToRule :: Label -> CProp -> CRule
+fromPropToRule label con = Rule
+  { label
+  , quantParams: []
+  , hyps: []
+  , con
+  }
 
 -- | Lattice
 data Lat xl
