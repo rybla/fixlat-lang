@@ -7,6 +7,8 @@ import Control.Biapplicative (class Biapplicative)
 import Data.Bifoldable (class Bifoldable, bifoldMap, bifoldl, bifoldr)
 import Data.Bifunctor (class Bifunctor, rmap)
 import Data.Bitraversable (class Bitraversable, rtraverse)
+import Data.Eq.Generic (genericEq)
+import Data.Generic.Rep (class Generic)
 import Data.Lattice (class JoinSemilattice, class Lattice, class MeetSemilattice, class PartialOrd)
 import Data.Newtype (class Newtype)
 import Data.Traversable (class Foldable, class Traversable, foldr, traverse)
@@ -152,16 +154,15 @@ data Term y xt
   | VarTerm xt y
   -- product
   | ProdTerm (Term y xt) (Term y xt) y
-  | Proj1Term (Term y xt) y
-  | Proj2Term (Term y xt) y
+  -- !TODO not sure if i wanna add these, cuz then i have to deal with more complicated forms of unification
+  -- | Proj1Term (Term y xt) y
+  -- | Proj2Term (Term y xt) y
   -- sum
   | Inj1Term (Term y xt) y
   | Inj2Term (Term y xt) y
-  | ElimTerm (Term y xt) CX (Term y xt) CX (Term y xt) y
+  -- !TODO not sure if i wanna add this, cuz then i have to deal with more complicated forms of unification
+  -- | ElimTerm (Term y xt) CX (Term y xt) CX (Term y xt) y 
 
-data AtomicTerm
-  = IntTerm Int
-  
 -- over type annotations
 derive instance Bifunctor Term
 derive instance Bifoldable Term
@@ -175,6 +176,12 @@ instance Foldable (Term y) where
 instance Traversable (Term y) where
   traverse f x = rtraverse f x
   sequence x = traverse identity x
+
+data AtomicTerm
+  = IntTerm Int
+  
+derive instance Generic AtomicTerm _
+instance Eq AtomicTerm where eq x y = genericEq x y
 
 -- | Aliases
 

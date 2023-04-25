@@ -5,51 +5,33 @@
 
 module Language.Fixlat.Querying where
 
-import Data.Either.Nested
-import Data.Tuple.Nested
+import Language.Fixlat.Deriv
 import Language.Fixlat.Grammar
+import Language.Fixlat.MVar
 import Prelude
 import Prim hiding (Type)
-import Utility
 
 import Control.Monad.Error.Class (class MonadError)
-import Control.Monad.List.Trans (ListT)
-import Control.Monad.Reader (class MonadReader, Reader, ReaderT, asks, local, runReader)
-import Control.Monad.State (class MonadState, State, StateT, gets, modify_, runState)
-import Control.MonadPlus (class MonadPlus)
-import Data.Array as Array
-import Data.Bifunctor (lmap, rmap)
+import Control.Monad.Reader (class MonadReader, asks, local, runReader)
+import Control.Monad.State (class MonadState, gets, modify_)
+import Data.Array.NonEmpty as Array
 import Data.Bitraversable (rtraverse)
-import Data.Cast (class Cast)
+import Data.Bug (bug)
 import Data.Either (Either(..), either)
-import Data.Foldable (class Foldable, foldM, foldMap, foldl, foldr)
+import Data.Either.Nested (type (\/))
+import Data.Foldable (foldM, foldMap, foldr)
+import Data.LatList (LatList, unwrap)
+import Data.LatList as LatList
 import Data.List as List
 import Data.Map as Map
-import Data.Maybe (Maybe(..), maybe, maybe')
-import Data.Newtype (unwrap)
-import Data.Set.Lattice as Lattice
-import Data.Traversable (class Traversable, for, traverse)
+import Data.Maybe (Maybe(..), maybe)
+import Data.Traversable (for, traverse)
+import Data.Tuple.Nested (type (/\), (/\))
 import Data.UUID (UUID)
 import Data.UUID as UUID
-import Effect.Exception.Unsafe (unsafeThrow)
 import Effect.Unsafe (unsafePerformEffect)
+import Language.Fixlat.Deriv as Deriv
 import Partial.Unsafe (unsafeCrashWith)
-
--- | MVar
-
-newtype MVar = MVar (Maybe Var /\ UUID)
-derive newtype instance Eq MVar
-derive newtype instance Ord MVar
-
-freshMVar :: Maybe Var -> MVar
-freshMVar mb_var = MVar (mb_var /\ unsafePerformEffect UUID.genUUID)
-
-type MX = MVar -- type of variables in a meta structure
-type MRule = LRule MX -- meta
-type MParam = Param MX
-type MProp = LProp MX
-type MTerm = LTerm MX
-type MDeriv = Deriv MX
 
 fromVarToMVar :: forall m. MonadReader (Map.Map Var MVar) m => Var -> m MVar
 fromVarToMVar x = asks (Map.lookup x) >>= case _ of 
@@ -58,29 +40,6 @@ fromVarToMVar x = asks (Map.lookup x) >>= case _ of
 
 fromCRuleToMRule :: CRule -> MRule
 fromCRuleToMRule = flip runReader Map.empty <<< rtraverse fromVarToMVar
-
--- | A derivation is a tree.
-data Deriv xt = Deriv
-  { label :: Label
-  , params :: Array (Param xt)
-  , hypsProven :: Array (Deriv xt)
-  , hyps :: Array (Prop CLat xt)
-  , con :: Prop CLat xt
-  }
-
-derive instance Functor Deriv 
-derive instance Foldable Deriv 
-derive instance Traversable Deriv
-
-fromRuleToDeriv :: forall xt. LRule xt -> Deriv xt
-fromRuleToDeriv (Rule rule) = Deriv
-  { label: rule.label
-  , params: rule.params
-  , hypsProven: []
-  , hyps: rule.hyps
-  , con: rule.con
-  }
-
 
 -- | MonadQuery
 
@@ -102,10 +61,10 @@ type Ctx =
   }
 
 -- | Querying state:
--- |   - `predLatticeSets`: map of predicate name to lattice set of known rules that
+-- |   - `predLatLists`: map of predicate name to lattice set of known rules that
 -- |     can produce instances of that predicate
 type St = 
-  { predLatticeSets :: Map.Map Var (Lattice.Set MDeriv)
+  { predLatLists :: Map.Map Var (LatList MDerivs)
   }
 
 newtype Err = Err String
@@ -134,10 +93,10 @@ instance Subst Deriv where
   substJoin (Deriv deriv) = do
     params <- foldMap identity <$> for deriv.params \p -> 
       p.bind <#> either (\x -> [p {bind = x}]) (const [])
-    hypsProven <- substJoin `traverse` deriv.hypsProven
+    derivsRev <- substJoin `traverse` deriv.derivsRev
     hyps <- substJoin `traverse` deriv.hyps
     con <- substJoin deriv.con
-    pure $ Deriv deriv {params = params, hypsProven = hypsProven, hyps = hyps, con = con}
+    pure $ Deriv deriv {params = params, derivsRev = derivsRev, hyps = hyps, con = con}
 
 instance Subst LProp where
   substJoin (Prop prop) = do
@@ -150,11 +109,8 @@ instance Subst LTerm where
     Left x -> pure (VarTerm x y)
     Right t -> pure t
   substJoin (ProdTerm t1 t2 y) = ProdTerm <$> substJoin t1 <*> substJoin t2 <*> pure y
-  substJoin (Proj1Term t y) = Proj1Term <$> substJoin t <*> pure y
-  substJoin (Proj2Term t y) = Proj2Term <$> substJoin t <*> pure y
   substJoin (Inj1Term t y) = Inj1Term <$> substJoin t <*> pure y
   substJoin (Inj2Term t y) = Inj2Term <$> substJoin t <*> pure y
-  substJoin (ElimTerm _ _ _ _ _ _) = unsafeThrow "TODO"
 
 -- | Localize the parameters of a rule by introducing them into the query
 -- | context.
@@ -162,10 +118,18 @@ localMDeriv :: forall m a. MonadQuery m => MDeriv -> m a -> m a
 localMDeriv (Deriv deriv) = local \ctx ->
   ctx {mvarQuants = foldr (\qp -> Map.insert qp.bind qp.quant) ctx.mvarQuants deriv.params}
 
--- !TODO
 learnDeriv :: forall m a. MonadQuery m => MDeriv -> m Unit
-learnDeriv _ = 
-  unsafeCrashWith "TODO"
+learnDeriv (Deriv d) = do 
+  let Prop con = d.con
+  -- gets (_.predLatLists >>> Map.lookup goal.pred) >>= case _ of
+  modify_ \st -> st 
+    { predLatLists = Map.alter
+        (case _ of
+          Nothing -> bug $ "[learnDeriv] each predicate should have an entry in predLatLists"
+          Just ll -> Just (LatList.insert (singleton (Deriv d)) ll)
+        )
+        con.pred st.predLatLists
+    }
 
 -- | An expected prop unifies with a candidate prop if there is a substitution
 -- | of uni-mvars in the candidate prop and a substitution of ex-mvars in the
@@ -184,110 +148,68 @@ localUnifyProps _mpropExpected _mpropCandidate _k =
 -- | Attempt to match a derivation's conclusion with a proposition. On success,
 -- | continue with the specialized derivation that has the goal as its conclusion.
 matchDerivation :: forall m a. MonadQuery m => MDeriv -> MProp -> (MDeriv -> m a) -> m (Maybe a)
-matchDerivation (Deriv deriv) goal onSuccess = do
-  -- localize a deriv
-  localMDeriv (Deriv deriv) do
-    -- unify goal with conclusion of deriv
-    let con = deriv.con
+matchDerivation (Deriv d) goal onSuccess = do
+  -- localize the derivation
+  localMDeriv (Deriv d) do
+    -- unify goal with conclusion of the derivation
+    let con = d.con
     localUnifyProps goal con do
-      -- apply unifying substitution to deriv
-      deriv' <- subst (Deriv deriv)
+      -- apply unifying substitution to the derivation
+      d' <- subst (Deriv d)
       -- continue
-      onSuccess deriv'
+      onSuccess d'
 
-queryProp :: forall m a. MonadQuery m => MProp -> m (Maybe MDeriv)
+queryProp :: forall m. MonadQuery m => MProp -> m (Maybe MDeriv)
 queryProp (Prop goal) = do
-  gets (_.predLatticeSets >>> Map.lookup goal.pred) >>= case _ of
-    -- there are no known derivations that can produce an instance of this
-    -- proposition's predicate
-    Nothing -> pure Nothing
+  gets (_.predLatLists >>> Map.lookup goal.pred) >>= case _ of
+    Nothing -> bug $ "[queryProp] each predicate should have an entry in predLatLists"
     -- there are some derivations that can produce instances of this
     -- propisition's predicate
-    Just derivs -> do
+    Just derivss -> do
+      let derivs = Deriv.concat $ List.toUnfoldable $ unwrap derivss
       -- for each derivation (break if done)
       (\f -> foldM f Nothing derivs) case _ of
         -- already proved goal, so just keep derivation
-        Just deriv -> \_ -> pure (Just deriv)
+        Just d -> \_ -> pure (Just d)
         -- haven't proved goal yet, so try this derivation
-        Nothing -> \deriv ->
-          join <$> matchDerivation deriv (Prop goal) \(Deriv deriv') -> 
-            case Array.uncons deriv'.hyps of
-              -- this deriv has no hypotheses, so we're done!
-              Nothing -> pure $ Just (Deriv deriv')
-              -- this deriv still has hypotheses, so try query the first one
-              Just {head: hyp, tail: hyps'} -> do
-                queryProp hyp >>= case _ of
-                  -- can't prove the first hypothesis, so just continue
-                  Nothing -> pure Nothing
-                  -- proved the first hypothesis, so learn the newly-proven
-                  -- knowledge, then continue
-                  Just deriv'' -> do
-                    learnDeriv deriv''
-                    pure Nothing
+        Nothing -> \d -> do
+          -- try to match goal with derivation's conclusion, then query matched
+          -- derivation
+          matchDerivation d (Prop goal) procDeriv >>= case _ of
+              -- failed to match goal with derivation's conclusion
+              -- !TODO put deriv in back
+              Nothing -> do
+                pure Nothing
+              -- failed to prove next hypothesis of matched derivation
+              -- !TODO put deriv in back
+              (Just Nothing) -> do
+                pure Nothing
+              -- !TODO put deriv in front
+              -- proved next hypothesis of matched derivation
+              (Just (Just Nothing)) -> do
+                pure Nothing
+              -- derivation is done, so query is done
+              (Just (Just (Just d'))) -> pure (Just d')
 
-
--- | Attempt to prove a rule. Continuation on successs.
-queryRule :: forall m a. MonadQuery m => MRule -> m a -> m (Maybe a)
-queryRule rule _onSuccess = do
-  -- -- learn the hypotheses
-  -- join $ foldM
-  --   (\k hyp -> do
-  --     -- learn hyp
-  --     pure (\b -> k ?a)
-  --   )
-  --   (if_ 
-  --     (goProp (unwrap rule).con) 
-  --     (pure Nothing))
-  --   (unwrap rule).hyps
-  --   <*> pure true
-  unsafeCrashWith "TODO"
-  where
-  goProp :: MProp -> m (Maybe a)
-  goProp _mprop = unsafeCrashWith "TODO"
-
-{-
---
--- !TODO old
---
-
-queryProp' :: forall m. MonadQuery m => MProp -> m Boolean
-queryProp' prop = do
-  gets (_.predLatticeSets >>> Map.lookup prop.bind) >>= case _ of 
-    -- there are no known rules that can produce an instance of this
-    -- proposition's predicate
-    Nothing -> pure false
-    -- there is a known set of rules that can produce an instance of this
-    -- proposition's predicate
-    Just set_cp -> do
-      -- for each rule
-      (\f -> foldM f false set_cp) case _ of 
-        -- already found a good rule
-        true -> \_ -> pure true
-        false -> \rule -> do
-          -- generalize rule
-          -- let rule = injectCRuleIntoMRule rule
-          -- -- specialize rule to expected conclusion
-          -- case specializeRule prop rule of 
-          --   Nothing -> pure false
-          --   Just rule' -> do
-          --     -- for each hyp
-          --     isProven <- (\f -> foldM f false (unwrap rule').hyps) case _ of
-          --       -- already failed to a previous hyp query
-          --       false -> \_ -> pure false 
-          --       -- have succeeded in each previous hyp query, so query this hyp
-          --       true -> queryProp'
-              
-          --     -- when isProven do
-          --     --   ?a -- !TODO add to knowledge
-          --     ?a
-          unsafeCrashWith "TODO"
-
--- | Yield expanded lattice set of rules by trying to use each old rule as a
--- | hypothesis of the new rule, and the new rule as a hypothesis of each old
--- | rule.
-matchRule :: forall m. MonadQuery m => CRule -> Lattice.Set CRule -> m (Lattice.Set CRule)
-matchRule _ _ = unsafeCrashWith "TODO"
-
-learnDeriv :: forall m. MonadQuery m => MRule -> m Unit
-learnDeriv mr = modify_ \st -> st { predLatticeSets = Map. }
--}
+-- | Process a derivation by:
+-- |  - if it has no hypotheses, then already have a fully-processed derivation
+-- |  - if has some hypotheses, then query the next hypothesis and if it's
+-- |    successfully proven then learn the resulting derivation that has that
+-- |    hypothesis proven 
+procDeriv :: forall m. MonadQuery m => MDeriv -> m (Maybe (Maybe MDeriv))
+procDeriv deriv@(Deriv d) = case d.hyps of
+  -- matched derivation has no hypotheses, so just yield it
+  List.Nil -> pure (Just (Just deriv))
+  -- matched derivation still has hypotheses, so query the next one
+  List.Cons hyp hyps -> do
+    queryProp hyp >>= case _ of
+      -- can't prove hypothesis
+      Nothing -> pure Nothing
+      -- proved next hypothesis
+      Just hypDeriv -> do
+        -- new derivation with the appropriate hypothesis proven hypothesis
+        let deriv' = Deriv d 
+              { derivsRev = List.Cons hypDeriv d.derivsRev
+              , hyps = hyps }
+        learnDeriv deriv'
+        pure (Just Nothing)

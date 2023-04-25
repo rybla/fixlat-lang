@@ -17,7 +17,9 @@ to generate this file without the comments in this block.
   , "console"
   , "control"
   , "effect"
+  , "either"
   , "enums"
+  , "exceptions"
   , "foldable-traversable"
   , "lists"
   , "maybe"
@@ -28,6 +30,7 @@ to generate this file without the comments in this block.
   , "record"
   , "transformers"
   , "tuples"
+  , "unfoldable"
   , "uuid"
   , "variant"
   ]
