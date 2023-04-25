@@ -3,12 +3,13 @@ module Language.Fixlat.Grammar where
 import Prelude
 import Prim hiding (Type)
 
-import Data.Bifoldable (class Bifoldable)
-import Data.Bifunctor (class Bifunctor)
-import Data.Bitraversable (class Bitraversable)
+import Control.Biapplicative (class Biapplicative)
+import Data.Bifoldable (class Bifoldable, bifoldMap, bifoldl, bifoldr)
+import Data.Bifunctor (class Bifunctor, rmap)
+import Data.Bitraversable (class Bitraversable, rtraverse)
 import Data.Lattice (class JoinSemilattice, class Lattice, class MeetSemilattice, class PartialOrd)
 import Data.Newtype (class Newtype)
-import Data.Traversable (class Foldable, class Traversable)
+import Data.Traversable (class Foldable, class Traversable, foldr, traverse)
 import Effect.Exception.Unsafe (unsafeThrow)
 
 newtype Label = Label String
@@ -44,13 +45,13 @@ derive instance Traversable Stmt
 type Pred =
   { label :: Label
   , bind :: CX
-  , param :: Param CX -- must have concrete param
+  , param :: CLat
   }
 
 -- | Inference Rule
 newtype Rule y xt = Rule
   { label :: Label
-  , quantParams :: Array (QuantParam xt)
+  , params :: Array (Param xt)
   , hyps :: Array (Prop y xt)
   , con :: Prop y xt
   }
@@ -58,38 +59,52 @@ newtype Rule y xt = Rule
 derive instance Newtype (Rule y xt) _
 derive instance Bifunctor Rule 
 derive instance Bifoldable Rule 
-derive instance Bitraversable Rule 
+derive instance Bitraversable Rule
 
-instance PartialOrd CRule where comparePartial = unsafeThrow "!TODO PartialOrd CRule"
-instance MeetSemilattice CRule where meet = unsafeThrow "!TODO MeetSemilattice CRule"
-instance JoinSemilattice CRule where join = unsafeThrow "!TODO JoinSemilattice CRule"
-instance Lattice CRule
+instance Functor (Rule y) where map f x = rmap f x
+instance Foldable (Rule y) where
+  foldr f b x = bifoldr (flip const) f b x
+  foldl f b x = bifoldl const f b x
+  foldMap f x = bifoldMap mempty f x
+instance Traversable (Rule y) where
+  traverse f x = rtraverse f x
+  sequence x = traverse identity x
 
--- !TODO when/if will i need this?
+-- instance PartialOrd CRule where comparePartial = unsafeThrow "!TODO PartialOrd CRule"
+-- instance MeetSemilattice CRule where meet = unsafeThrow "!TODO MeetSemilattice CRule"
+-- instance JoinSemilattice CRule where join = unsafeThrow "!TODO JoinSemilattice CRule"
+-- instance Lattice CRule
+
 -- instance PartialOrd MRule where comparePartial = unsafeThrow "!TODO PartialOrd MRule"
 -- instance MeetSemilattice MRule where meet = unsafeThrow "!TODO MeetSemilattice MRule"
 -- instance JoinSemilattice MRule where join = unsafeThrow "!TODO JoinSemilattice MRule"
 -- instance Lattice MRule
 
 -- | A parameter is quantified, named, and typed.
-type QuantParam xt = { quant :: Quant, bind :: xt, type_ :: Lat CX }
+type Param xt = { quant :: Quant, bind :: xt, type_ :: CLat }
 
 data Quant = UnivQuant | ExistQuant
 
--- | A parameter is named and typed.
-type Param xt = { bind :: xt, type_ :: Lat CX }
-
 -- | A proposition is a predicate applied to an argument term.
-newtype Prop y xt = Prop { bind :: CX, arg :: Term y xt }
+newtype Prop y xt = Prop { pred :: CX, arg :: Term y xt }
 derive instance Newtype (Prop y xs) _
 derive instance Bifunctor Prop 
 derive instance Bifoldable Prop 
 derive instance Bitraversable Prop 
 
+instance Functor (Prop y) where map f x = rmap f x
+instance Foldable (Prop y) where
+  foldr f b x = bifoldr (flip const) f b x
+  foldl f b x = bifoldl const f b x
+  foldMap f x = bifoldMap mempty f x
+instance Traversable (Prop y) where
+  traverse f x = rtraverse f x
+  sequence x = traverse identity x
+
 fromPropToRule :: Label -> CProp -> CRule
 fromPropToRule label con = Rule
   { label
-  , quantParams: []
+  , params: []
   , hyps: []
   , con
   }
@@ -144,34 +159,44 @@ data Term y xt
   | Inj2Term (Term y xt) y
   | ElimTerm (Term y xt) CX (Term y xt) CX (Term y xt) y
 
+data AtomicTerm
+  = IntTerm Int
+  
 -- over type annotations
 derive instance Bifunctor Term
 derive instance Bifoldable Term
 derive instance Bitraversable Term
 
-data AtomicTerm
-  = IntTerm Int
+instance Functor (Term y) where map f x = rmap f x
+instance Foldable (Term y) where
+  foldr f b x = bifoldr (flip const) f b x
+  foldl f b x = bifoldl const f b x
+  foldMap f x = bifoldMap mempty f x
+instance Traversable (Term y) where
+  traverse f x = rtraverse f x
+  sequence x = traverse identity x
 
 -- | Aliases
 
 -- typed
-type TModule = Module (Type CX)
-type TStmt = Stmt (Type CX)
-type TRule = Rule (Type CX)
-type TProp = Prop (Type CX)
-type TTerm = Term (Type CX)
+type TModule = Module CType
+type TStmt = Stmt CType
+type TRule = Rule CType
+type TProp = Prop CType
+type TTerm = Term CType
 
 -- latticed (=> typed)
-type LModule = Module (Lat CX)
-type LStmt = Stmt (Lat CX)
-type LType = Type (Lat CX)
-type LProp = Prop (Lat CX)
-type LTerm = Term (Lat CX)
-type LRule = Rule (Lat CX)
+type LModule = Module CLat
+type LStmt = Stmt CLat
+type LType = Type CLat
+type LProp = Prop CLat
+type LTerm = Term CLat
+type LRule = Rule CLat
 
 -- concrete (=> latticed)
 type CRule = LRule CX
-type CQuantParam = QuantParam CX
 type CParam = Param CX
 type CProp = LProp CX
+type CLat = Lat CX
+type CType = Type CX
 type CTerm = LTerm CX
