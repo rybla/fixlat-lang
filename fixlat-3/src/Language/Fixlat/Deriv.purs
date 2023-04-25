@@ -19,7 +19,7 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.Traversable (class Traversable)
 import Data.Tuple (snd)
 import Data.Tuple.Nested ((/\))
-import Record as Record
+import Record as R
 import Type.Proxy (Proxy(..))
 
 -- | A derivation is a tree.
@@ -53,13 +53,13 @@ concat = foldMap unwrap
 instance Ord xt => PartialOrd (Deriv xt) where
   -- d1 <= d2  <==>  d1 has more general hypotheses and more specific conclusion
   comparePartial d1 d2 =
-    case runUnify (unifyLeDeriv d1 d2) of
+    case runUnify' (unifyLeDeriv d1 d2) of
       Just st -> 
         -- d1 is alpha-equivalent to d2
         if isRenaming st.exiSigma && isRenaming st.uniSigma then Just EQ
         -- d1 is less general than d2 via sigma
         else Just LT
-      Nothing -> case runUnify (unifyLeDeriv d2 d1) of
+      Nothing -> case runUnify' (unifyLeDeriv d2 d1) of
         Just st -> 
           -- d1 is alpha-equivalent to d2
           if isRenaming st.exiSigma && isRenaming st.uniSigma then Just EQ
@@ -89,8 +89,17 @@ type UnifySt xt = {exiSigma :: Map.Map xt (LTerm xt), uniSigma :: Map.Map xt (LT
 _exiSigma = Proxy :: Proxy "exiSigma"
 _uniSigma = Proxy :: Proxy "uniSigma"
 
-runUnify :: forall xt a. UnifyM xt a -> Maybe (UnifySt xt)
-runUnify = flip runReaderT Map.empty >>> flip runStateT {exiSigma: Map.empty, uniSigma: Map.empty} >>> map snd
+totalSigma :: forall xt. Ord xt => UnifyM xt (Map.Map xt (LTerm xt))
+totalSigma = do
+  exiSigma <- gets _.exiSigma
+  uniSigma <- gets _.uniSigma
+  pure $ exiSigma `Map.union` uniSigma
+
+runUnify :: forall xt a. UnifyCtx xt -> UnifySt xt -> UnifyM xt a -> Maybe (UnifySt xt)
+runUnify ctx st m = snd <$> runStateT (runReaderT m ctx) st
+
+runUnify' :: forall xt a. UnifyM xt a -> Maybe (UnifySt xt)
+runUnify' = runUnify Map.empty {exiSigma: Map.empty, uniSigma: Map.empty}
 
 tryUnify :: forall xt a. UnifyM xt a -> UnifyM xt (Maybe a)
 tryUnify m = do
@@ -98,8 +107,8 @@ tryUnify m = do
   ctx <- ask
   case flip runReaderT ctx >>> flip runStateT st $ m of
     Nothing -> pure Nothing
-    Just (a /\ sigma) -> do
-      put sigma
+    Just (a /\ st) -> do
+      put st
       pure (Just a)
 
 anyUnify :: forall f xt a. Foldable f => f (UnifyM xt a) -> UnifyM xt a
@@ -113,8 +122,8 @@ anyUnify ms = foldM f Nothing ms >>= case _ of
 -- constravariant in hypotheses
 unifyLeDeriv :: forall xt. Ord xt => Deriv xt -> Deriv xt -> UnifyM xt Unit
 unifyLeDeriv deriv1 deriv2 = do
-  Deriv d1 <- substDeriv deriv1 <$> gets _.exiSigma
-  Deriv d2 <- substDeriv deriv2 <$> gets _.uniSigma
+  Deriv d1 <- substDeriv deriv1 <$> totalSigma
+  Deriv d2 <- substDeriv deriv2 <$> totalSigma
   -- intro quantifications
   local (flip (foldr (\p -> Map.insert p.bind p.quant)) (d1.params <> d2.params)) do
     -- check that each d1 hyp is MORE general than at least one d2 hyp
@@ -127,22 +136,22 @@ unifyLeLProp :: forall xt. Ord xt => LProp xt -> LProp xt -> UnifyM xt Unit
 unifyLeLProp (Prop p1) (Prop p2) | p1.pred /= p2.pred = empty
 unifyLeLProp (Prop p1) (Prop p2) = unifyLeLTerm p1.arg p2.arg
 
--- | Check that there exists substitutions sigmaUni, sigmaExi such that
--- term1[sigmaExi] = term2[sigmaUni]
+-- | Check that there exists substitutions uniSigma, exiSigma such that
+-- term1[exiSigma] = term2[uniSigma]
 unifyLeLTerm :: forall xt. Ord xt => LTerm xt -> LTerm xt -> UnifyM xt Unit
 unifyLeLTerm term1 term2 = do
-  term1' <- substLTerm term1 <$> gets _.exiSigma
-  term2' <- substLTerm term2 <$> gets _.uniSigma
+  term1' <- substLTerm term1 <$> totalSigma
+  term2' <- substLTerm term2 <$> totalSigma
   case term1' /\ term2' of
     VarTerm x1 _ /\ _ -> asks (Map.lookup x1) >>= case _ of
       Nothing -> bug $ "[unifyLeLTerm] when looking up quantifier, unknown variable"
       -- substitute existentials on the left
-      Just ExistQuant -> modify_ $ Record.modify _exiSigma $ Map.insert x1 term2'
+      Just ExistQuant -> modify_ $ R.modify _exiSigma $ Map.insert x1 term2'
       Just _ -> go term1' term2'
     _ /\ VarTerm x2 _ -> asks (Map.lookup x2) >>= case _ of
       Nothing -> bug $ "[unifyLeLTerm] when looking up quantifier, unknown variable"
       -- substitute universals on the right
-      Just UnivQuant -> modify_ $ Record.modify _uniSigma $ Map.insert x2 term1'
+      Just UnivQuant -> modify_ $ R.modify _uniSigma $ Map.insert x2 term1'
       Just ExistQuant -> go term1' term2'
     _ -> go term1' term2'
   where

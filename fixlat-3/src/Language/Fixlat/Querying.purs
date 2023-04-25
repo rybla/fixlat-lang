@@ -14,7 +14,6 @@ import Prim hiding (Type)
 import Control.Monad.Error.Class (class MonadError)
 import Control.Monad.Reader (class MonadReader, asks, local, runReader)
 import Control.Monad.State (class MonadState, gets, modify_)
-import Data.Array.NonEmpty as Array
 import Data.Bitraversable (rtraverse)
 import Data.Bug (bug)
 import Data.Either (Either(..), either)
@@ -25,13 +24,9 @@ import Data.LatList as LatList
 import Data.List as List
 import Data.Map as Map
 import Data.Maybe (Maybe(..), maybe)
-import Data.Traversable (for, traverse)
-import Data.Tuple.Nested (type (/\), (/\))
-import Data.UUID (UUID)
-import Data.UUID as UUID
-import Effect.Unsafe (unsafePerformEffect)
+import Data.Traversable (for, sequence, traverse)
 import Language.Fixlat.Deriv as Deriv
-import Partial.Unsafe (unsafeCrashWith)
+import Type.Proxy (Proxy(..))
 
 fromVarToMVar :: forall m. MonadReader (Map.Map Var MVar) m => Var -> m MVar
 fromVarToMVar x = asks (Map.lookup x) >>= case _ of 
@@ -59,6 +54,7 @@ type Ctx =
   , mvarQuants :: Map.Map MVar Quant
   , mvarSubst :: Map.Map MVar MTerm
   }
+_mvarSubst = Proxy :: Proxy "mvarSubst"
 
 -- | Querying state:
 -- |   - `predLatLists`: map of predicate name to lattice set of known rules that
@@ -69,48 +65,6 @@ type St =
 
 newtype Err = Err String
 instance Show Err where show (Err str) = "[querying error] " <> show str
-
--- | Substitution
-
-class Subst :: (Prim.Type -> Prim.Type) -> Constraint
-class Functor t <= Subst t where substJoin :: forall m. MonadQuery m => t (m (MVar \/ MTerm)) -> m (t MVar)
-
-substMVar :: forall m. MonadQuery m => MVar -> m (Maybe MTerm)
-substMVar x = asks (_.mvarSubst >>> Map.lookup x)
-
-subst :: forall t m. Subst t => MonadQuery m => t MVar -> m (t MVar)
-subst = substJoin <<< map \mv -> substMVar mv <#> maybe (Left mv) Right
-
-instance Subst LRule where
-  substJoin (Rule rule) = do
-    params <- foldMap identity <$> for rule.params \p -> 
-      p.bind <#> either (\x -> [p {bind = x}]) (const [])
-    hyps <- substJoin `traverse` rule.hyps
-    con <- substJoin rule.con
-    pure $ Rule rule {params = params, hyps = hyps, con = con}
-
-instance Subst Deriv where
-  substJoin (Deriv deriv) = do
-    params <- foldMap identity <$> for deriv.params \p -> 
-      p.bind <#> either (\x -> [p {bind = x}]) (const [])
-    derivsRev <- substJoin `traverse` deriv.derivsRev
-    hyps <- substJoin `traverse` deriv.hyps
-    con <- substJoin deriv.con
-    pure $ Deriv deriv {params = params, derivsRev = derivsRev, hyps = hyps, con = con}
-
-instance Subst LProp where
-  substJoin (Prop prop) = do
-    arg <- substJoin prop.arg
-    pure $ Prop prop {arg = arg}
-
-instance Subst LTerm where
-  substJoin (AtomicTerm at y) = pure (AtomicTerm at y)
-  substJoin (VarTerm mx y) = mx >>= case _ of
-    Left x -> pure (VarTerm x y)
-    Right t -> pure t
-  substJoin (ProdTerm t1 t2 y) = ProdTerm <$> substJoin t1 <*> substJoin t2 <*> pure y
-  substJoin (Inj1Term t y) = Inj1Term <$> substJoin t <*> pure y
-  substJoin (Inj2Term t y) = Inj2Term <$> substJoin t <*> pure y
 
 -- | Localize the parameters of a rule by introducing them into the query
 -- | context.
@@ -131,19 +85,14 @@ learnDeriv (Deriv d) = do
         con.pred st.predLatLists
     }
 
--- | An expected prop unifies with a candidate prop if there is a substitution
--- | of uni-mvars in the candidate prop and a substitution of ex-mvars in the
--- | expected prop that make them syntactically equal.
--- |
--- | Special cases:
--- | - !TODO Always defer to substituting the candidate for the expected?
--- |   - unifying an expected ex-mvar with a candidate uni-mvar
--- |   - unifying an expected ex-mvar with a candidate ex-mvar
--- |   - unifying an expected uni-mvar with a candidate ex-mvar
--- |   - unifying an expected uni-mvar with a candidate uni-mvar
+-- | Find a unifying substitution where the expected prop is implied by the
+-- | candidate prop (i.e. `expectedProp <= candidateProp`).
 localUnifyProps :: forall m a. MonadQuery m => MProp -> MProp -> m a -> m (Maybe a)
-localUnifyProps _mpropExpected _mpropCandidate _k = 
-  unsafeCrashWith "TODO"
+localUnifyProps expectedProp candidateProp m = do
+  uCtx <- asks _.mvarQuants
+  let uSt = {exiSigma: Map.empty, uniSigma: Map.empty}
+  sequence $ runUnify uCtx uSt (unifyLeLProp expectedProp candidateProp) <#> \uSt' ->
+    local (\qSt -> qSt{mvarSubst = Map.unions [qSt.mvarSubst, uSt'.exiSigma, uSt'.uniSigma]}) m
 
 -- | Attempt to match a derivation's conclusion with a proposition. On success,
 -- | continue with the specialized derivation that has the goal as its conclusion.
@@ -155,7 +104,7 @@ matchDerivation (Deriv d) goal onSuccess = do
     let con = d.con
     localUnifyProps goal con do
       -- apply unifying substitution to the derivation
-      d' <- subst (Deriv d)
+      d' <- substDeriv (Deriv d) <$> asks _.mvarSubst
       -- continue
       onSuccess d'
 
