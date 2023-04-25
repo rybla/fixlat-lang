@@ -28,6 +28,7 @@ to generate this file without the comments in this block.
   , "record"
   , "transformers"
   , "tuples"
+  , "uuid"
   , "variant"
   ]
 , packages = ./packages.dhall
