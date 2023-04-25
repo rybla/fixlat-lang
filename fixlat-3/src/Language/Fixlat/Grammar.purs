@@ -80,7 +80,11 @@ data Quant = UnivQuant | ExistQuant
 type Param xt = { bind :: xt, type_ :: Lat CX }
 
 -- | A proposition is a predicate applied to an argument term.
-type Prop y xt = { bind :: CX, arg :: Term y xt }
+newtype Prop y xt = Prop { bind :: CX, arg :: Term y xt }
+derive instance Newtype (Prop y xs) _
+derive instance Bifunctor Prop 
+derive instance Bifoldable Prop 
+derive instance Bitraversable Prop 
 
 fromPropToRule :: Label -> CProp -> CRule
 fromPropToRule label con = Rule
@@ -151,22 +155,23 @@ data AtomicTerm
 -- | Aliases
 
 -- typed
-type TModule l = Module (Type CX)
-type TStmt l = Stmt (Type CX)
-type TRule l = Rule (Type CX)
-type TProp xt = Prop (Type CX) xt
-type TTerm l = Term (Type CX)
+type TModule = Module (Type CX)
+type TStmt = Stmt (Type CX)
+type TRule = Rule (Type CX)
+type TProp = Prop (Type CX)
+type TTerm = Term (Type CX)
 
 -- latticed (=> typed)
-type LModule = TModule (Lat CX)
-type LStmt = TStmt (Lat CX)
+type LModule = Module (Lat CX)
+type LStmt = Stmt (Lat CX)
 type LType = Type (Lat CX)
-type LTerm = TTerm (Lat CX)
-type LRule = TRule (Lat CX)
+type LProp = Prop (Lat CX)
+type LTerm = Term (Lat CX)
+type LRule = Rule (Lat CX)
 
 -- concrete (=> latticed)
 type CRule = LRule CX
 type CQuantParam = QuantParam CX
 type CParam = Param CX
-type CProp = TProp CX
+type CProp = LProp CX
 type CTerm = LTerm CX
