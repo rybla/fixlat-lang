@@ -118,7 +118,7 @@ localMDeriv :: forall m a. MonadQuery m => MDeriv -> m a -> m a
 localMDeriv (Deriv deriv) = local \ctx ->
   ctx {mvarQuants = foldr (\qp -> Map.insert qp.bind qp.quant) ctx.mvarQuants deriv.params}
 
-learnDeriv :: forall m a. MonadQuery m => MDeriv -> m Unit
+learnDeriv :: forall m. MonadQuery m => MDeriv -> m Unit
 learnDeriv (Deriv d) = do 
   let Prop con = d.con
   -- gets (_.predLatLists >>> Map.lookup goal.pred) >>= case _ of
