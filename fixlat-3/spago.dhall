@@ -28,6 +28,7 @@ to generate this file without the comments in this block.
   , "ordered-collections"
   , "partial"
   , "prelude"
+  , "profunctor"
   , "record"
   , "strings"
   , "transformers"

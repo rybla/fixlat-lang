@@ -1,9 +1,10 @@
 module Language.Fixlat.Deriv where
 
+import Data.Tuple.Nested
 import Language.Fixlat.Grammar
 import Prelude
-
 import Text.Pretty
+import Data.Bifunctor (rmap)
 import Control.Monad.Reader (class MonadReader, ReaderT, ask, asks, local, runReaderT)
 import Control.Monad.State (class MonadState, StateT, get, gets, modify_, put, runStateT)
 import Control.MonadPlus (class MonadPlus)
@@ -29,6 +30,7 @@ import Type.Proxy (Proxy(..))
 -- | A derivation is a tree.
 data Deriv xt = Deriv
   { label :: Label
+  , sigma :: Array (xt /\ LTerm xt)
   , params :: Array (Param xt)
   , derivsRev :: List (Deriv xt)
   , hyps :: List (Prop CLat xt)
@@ -37,10 +39,11 @@ data Deriv xt = Deriv
 
 instance Pretty xt => Pretty (Deriv xt) where
   pretty (Deriv d) =
-    "deriv" <+> pretty d.label <+>
-    "(" <> intercalate ", " (pretty <$> d.params) <> ")" <+> 
+    pretty d.label <+>
+    "(" <> intercalate ", " ((d.sigma <#> \(x /\ t) -> pretty x <> "=" <> pretty t) <> (pretty <$> d.params)) <> ")" <+> 
     "{" <>
-      intercalate ", " (pretty <$> d.hyps) <+>
+      (if List.null d.derivsRev then "" else "proven[" <> intercalate ", " (pretty <$> List.reverse d.derivsRev) <> "]") <+>
+      (if List.null d.hyps then "" else intercalate ", " (pretty <$> d.hyps)) <+>
       "|-" <+>
       pretty d.con <>
     "}"
@@ -184,6 +187,7 @@ unifyLeLTerm term1 term2 = do
 substDeriv :: forall xt. Ord xt => Deriv xt -> Map.Map xt (LTerm xt) -> Deriv xt
 substDeriv (Deriv d) sigma = Deriv d
   { params = Array.filter ((\(Param p) -> p.bind) >>> (flip Map.member sigma) >>> not) d.params
+  , sigma = (rmap (flip substLTerm sigma) <$> d.sigma) <> Map.toUnfoldable sigma
   , derivsRev = flip substDeriv sigma <$> d.derivsRev
   , hyps = flip substLProp sigma <$> d.hyps
   , con = substLProp d.con sigma
@@ -221,6 +225,7 @@ instance Ord xt => Lattice (Derivs xt)
 fromRuleToDeriv :: forall xt. LRule xt -> Deriv xt
 fromRuleToDeriv (Rule rule) = Deriv
   { label: rule.label
+  , sigma: mempty
   , params: rule.params
   , derivsRev: mempty
   , hyps: List.fromFoldable rule.hyps

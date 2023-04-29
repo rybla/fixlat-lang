@@ -139,10 +139,11 @@ queryProp (Prop goal) = do
                 Debug.traceM $ "[queryProp] matched; failed to prove next hyp of deriv"
                 pure Nothing
               -- !TODO move deriv to front
-              -- proved next hypothesis of matched derivation
+              -- proved next hypothesis of matched derivation, so we're making
+              -- progress, but not done yet
               (Just (Just Nothing)) -> do
                 Debug.traceM $ "[queryProp] matched; proved next hyp of deriv"
-                pure Nothing
+                queryProp (Prop goal)
               -- !TODO move deriv to back
               -- derivation is done, so query is done
               (Just (Just (Just d'))) -> do
@@ -157,12 +158,16 @@ queryProp (Prop goal) = do
 procDeriv :: forall m. Monad m => MDeriv -> QueryT m (Maybe (Maybe MDeriv))
 procDeriv deriv@(Deriv d) = case d.hyps of
   -- matched derivation has no hypotheses, so just yield it
-  List.Nil -> pure (Just (Just deriv))
+  List.Nil -> do
+    Debug.traceM $ "[procDeriv] matched deriv has no more hypotheses, so just yield it; derive = " <> pretty deriv
+    pure (Just (Just deriv))
   -- matched derivation still has hypotheses, so query the next one
   List.Cons hyp hyps -> do
     queryProp hyp >>= case _ of
-      -- can't prove hypothesis
-      Nothing -> pure Nothing
+      -- failed to prove hypothesis
+      Nothing -> do
+        Debug.traceM $ "[procDeriv] failed to prove hyp of deriv; hyp = " <> pretty hyp <> "; deriv = " <> pretty deriv
+        pure Nothing
       -- proved next hypothesis
       Just hypDeriv -> do
         -- new derivation with the appropriate hypothesis proven hypothesis
@@ -170,5 +175,6 @@ procDeriv deriv@(Deriv d) = case d.hyps of
               { derivsRev = List.Cons hypDeriv d.derivsRev
               , hyps = hyps }
         -- learned deriv is put at front
+        Debug.traceM $ "[procDeriv] proved next hyp so learn its hypDeriv; hypDeriv = " <> pretty hypDeriv <> "; deriv' = " <> pretty deriv'
         learnDeriv deriv'
         pure (Just Nothing)
