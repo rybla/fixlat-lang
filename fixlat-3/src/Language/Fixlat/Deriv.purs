@@ -3,23 +3,27 @@ module Language.Fixlat.Deriv where
 import Language.Fixlat.Grammar
 import Prelude
 
+import Text.Pretty
 import Control.Monad.Reader (class MonadReader, ReaderT, ask, asks, local, runReaderT)
 import Control.Monad.State (class MonadState, StateT, get, gets, modify_, put, runStateT)
 import Control.MonadPlus (class MonadPlus)
 import Control.Plus (empty)
 import Data.Array as Array
 import Data.Bug (bug)
-import Data.Foldable (class Foldable, foldM, foldMap, foldr, sequence_, traverse_)
+import Data.Foldable (class Foldable, foldM, foldMap, foldr, intercalate, sequence_, traverse_)
+import Data.Generic.Rep (class Generic)
 import Data.Lattice (class JoinSemilattice, class Lattice, class MeetSemilattice, class PartialOrd, comparePartial)
 import Data.List (List)
 import Data.List as List
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.Newtype (class Newtype, unwrap)
+import Data.Show.Generic (genericShow)
 import Data.Traversable (class Traversable)
 import Data.Tuple (snd)
 import Data.Tuple.Nested ((/\))
 import Record as R
+import Text.Pretty (class Pretty)
 import Type.Proxy (Proxy(..))
 
 -- | A derivation is a tree.
@@ -31,12 +35,25 @@ data Deriv xt = Deriv
   , con :: Prop CLat xt
   }
 
+instance Pretty xt => Pretty (Deriv xt) where
+  pretty (Deriv d) =
+    "deriv" <+> pretty d.label <+>
+    "(" <> intercalate ", " (pretty <$> d.params) <> ")" <+> 
+    "{" <>
+      intercalate ", " (pretty <$> d.hyps) <+>
+      "|-" <+>
+      pretty d.con <>
+    "}"
+
+derive instance Generic (Deriv xt) _
+instance Show xt => Show (Deriv xt) where show x = genericShow x
 derive instance Functor Deriv
 derive instance Foldable Deriv 
 derive instance Traversable Deriv
 
 newtype Derivs xt = Derivs (Array (Deriv xt))
 derive instance Newtype (Derivs xt) _
+derive newtype instance Show a => Show (Derivs a)
 
 singleton :: forall xt. Deriv xt -> Derivs xt
 singleton deriv = Derivs (Array.singleton deriv)
@@ -125,7 +142,7 @@ unifyLeDeriv deriv1 deriv2 = do
   Deriv d1 <- substDeriv deriv1 <$> totalSigma
   Deriv d2 <- substDeriv deriv2 <$> totalSigma
   -- intro quantifications
-  local (flip (foldr (\p -> Map.insert p.bind p.quant)) (d1.params <> d2.params)) do
+  local (flip (foldr (\(Param p) -> Map.insert p.bind p.quant)) (d1.params <> d2.params)) do
     -- check that each d1 hyp is MORE general than at least one d2 hyp
     flip traverse_ d1.hyps \hyp1 ->
       anyUnify (d2.hyps <#> \hyp2 -> unifyLeLProp hyp2 hyp1)
@@ -166,7 +183,7 @@ unifyLeLTerm term1 term2 = do
 
 substDeriv :: forall xt. Ord xt => Deriv xt -> Map.Map xt (LTerm xt) -> Deriv xt
 substDeriv (Deriv d) sigma = Deriv d
-  { params = Array.filter (_.bind >>> (flip Map.member sigma) >>> not) d.params
+  { params = Array.filter ((\(Param p) -> p.bind) >>> (flip Map.member sigma) >>> not) d.params
   , derivsRev = flip substDeriv sigma <$> d.derivsRev
   , hyps = flip substLProp sigma <$> d.hyps
   , con = substLProp d.con sigma

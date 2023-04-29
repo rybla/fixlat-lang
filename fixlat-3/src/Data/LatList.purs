@@ -13,6 +13,7 @@ import Data.Tuple.Nested (type (/\), (/\))
 newtype LatList a = LatList (List a)
 
 derive instance Newtype (LatList a) _
+derive newtype instance Show a => Show (LatList a)
 derive newtype instance Functor LatList
 derive newtype instance Foldable LatList
 derive newtype instance Traversable LatList

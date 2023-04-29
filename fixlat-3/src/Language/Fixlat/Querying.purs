@@ -11,21 +11,20 @@ import Language.Fixlat.MVar
 import Prelude
 import Prim hiding (Type)
 
-import Control.Monad.Error.Class (class MonadError)
-import Control.Monad.Reader (class MonadReader, asks, local, runReader)
-import Control.Monad.State (class MonadState, gets, modify_)
+import Control.Monad.Reader (class MonadReader, ReaderT, asks, local, runReader)
+import Control.Monad.State (StateT, gets, modify_)
 import Data.Bitraversable (rtraverse)
 import Data.Bug (bug)
-import Data.Either (Either(..), either)
-import Data.Either.Nested (type (\/))
-import Data.Foldable (foldM, foldMap, foldr)
+import Data.Foldable (foldM, foldr)
 import Data.LatList (LatList, unwrap)
 import Data.LatList as LatList
 import Data.List as List
 import Data.Map as Map
-import Data.Maybe (Maybe(..), maybe)
-import Data.Traversable (for, sequence, traverse)
+import Data.Maybe (Maybe(..))
+import Data.Traversable (sequence)
+import Debug as Debug
 import Language.Fixlat.Deriv as Deriv
+import Text.Pretty (pretty)
 import Type.Proxy (Proxy(..))
 
 fromVarToMVar :: forall m. MonadReader (Map.Map Var MVar) m => Var -> m MVar
@@ -38,12 +37,15 @@ fromCRuleToMRule = flip runReader Map.empty <<< rtraverse fromVarToMVar
 
 -- | MonadQuery
 
-class
-  ( Monad m
-  , MonadReader Ctx m
-  , MonadState St m
-  , MonadError Err m
-  ) <= MonadQuery m
+-- class
+--   ( Monad m
+--   , MonadReader Ctx m
+--   , MonadState St m
+--   ) <= MonadQuery m
+
+-- type MonadQuery m = (Monad m)
+
+type QueryT m = StateT St (ReaderT Ctx m)
 
 -- | Querying context:
 -- |   - `preds`: map of predicate name to predicate declaration
@@ -68,14 +70,13 @@ instance Show Err where show (Err str) = "[querying error] " <> show str
 
 -- | Localize the parameters of a rule by introducing them into the query
 -- | context.
-localMDeriv :: forall m a. MonadQuery m => MDeriv -> m a -> m a
+localMDeriv :: forall m a. Monad m => MDeriv -> QueryT m a -> QueryT m a
 localMDeriv (Deriv deriv) = local \ctx ->
-  ctx {mvarQuants = foldr (\qp -> Map.insert qp.bind qp.quant) ctx.mvarQuants deriv.params}
+  ctx {mvarQuants = foldr (\(Param p) -> Map.insert p.bind p.quant) ctx.mvarQuants deriv.params}
 
-learnDeriv :: forall m. MonadQuery m => MDeriv -> m Unit
+learnDeriv :: forall m. Monad m => MDeriv -> QueryT m Unit
 learnDeriv (Deriv d) = do 
   let Prop con = d.con
-  -- gets (_.predLatLists >>> Map.lookup goal.pred) >>= case _ of
   modify_ \st -> st 
     { predLatLists = Map.alter
         (case _ of
@@ -87,7 +88,7 @@ learnDeriv (Deriv d) = do
 
 -- | Find a unifying substitution where the expected prop is implied by the
 -- | candidate prop (i.e. `expectedProp <= candidateProp`).
-localUnifyProps :: forall m a. MonadQuery m => MProp -> MProp -> m a -> m (Maybe a)
+localUnifyProps :: forall m a. Monad m => MProp -> MProp -> QueryT m a -> QueryT m (Maybe a)
 localUnifyProps expectedProp candidateProp m = do
   uCtx <- asks _.mvarQuants
   let uSt = {exiSigma: Map.empty, uniSigma: Map.empty}
@@ -96,7 +97,7 @@ localUnifyProps expectedProp candidateProp m = do
 
 -- | Attempt to match a derivation's conclusion with a proposition. On success,
 -- | continue with the specialized derivation that has the goal as its conclusion.
-matchDerivation :: forall m a. MonadQuery m => MDeriv -> MProp -> (MDeriv -> m a) -> m (Maybe a)
+matchDerivation :: forall m a. Monad m => MDeriv -> MProp -> (MDeriv -> QueryT m a) -> QueryT m (Maybe a)
 matchDerivation (Deriv d) goal onSuccess = do
   -- localize the derivation
   localMDeriv (Deriv d) do
@@ -108,8 +109,9 @@ matchDerivation (Deriv d) goal onSuccess = do
       -- continue
       onSuccess d'
 
-queryProp :: forall m. MonadQuery m => MProp -> m (Maybe MDeriv)
+queryProp :: forall m. Monad m => MProp -> QueryT m (Maybe MDeriv)
 queryProp (Prop goal) = do
+  Debug.traceM $ "[queryProp] goal = " <> pretty (Prop goal)
   gets (_.predLatLists >>> Map.lookup goal.pred) >>= case _ of
     Nothing -> bug $ "[queryProp] each predicate should have an entry in predLatLists"
     -- there are some derivations that can produce instances of this
@@ -124,28 +126,35 @@ queryProp (Prop goal) = do
         Nothing -> \d -> do
           -- try to match goal with derivation's conclusion, then query matched
           -- derivation
+          Debug.traceM $ "[queryProp] trying to match goal with deriv: " <> pretty d
           matchDerivation d (Prop goal) procDeriv >>= case _ of
               -- failed to match goal with derivation's conclusion
-              -- !TODO put deriv in back
+              -- !TODO move deriv to back
               Nothing -> do
+                Debug.traceM $ "[queryProp] failed to match"
                 pure Nothing
               -- failed to prove next hypothesis of matched derivation
-              -- !TODO put deriv in back
+              -- !TODO move deriv to back
               (Just Nothing) -> do
+                Debug.traceM $ "[queryProp] matched; failed to prove next hyp of deriv"
                 pure Nothing
-              -- !TODO put deriv in front
+              -- !TODO move deriv to front
               -- proved next hypothesis of matched derivation
               (Just (Just Nothing)) -> do
+                Debug.traceM $ "[queryProp] matched; proved next hyp of deriv"
                 pure Nothing
+              -- !TODO move deriv to back
               -- derivation is done, so query is done
-              (Just (Just (Just d'))) -> pure (Just d')
+              (Just (Just (Just d'))) -> do
+                Debug.traceM $ "[queryProp] matched; deriv has no hyps, so done"
+                pure (Just d')
 
 -- | Process a derivation by:
 -- |  - if it has no hypotheses, then already have a fully-processed derivation
 -- |  - if has some hypotheses, then query the next hypothesis and if it's
 -- |    successfully proven then learn the resulting derivation that has that
 -- |    hypothesis proven 
-procDeriv :: forall m. MonadQuery m => MDeriv -> m (Maybe (Maybe MDeriv))
+procDeriv :: forall m. Monad m => MDeriv -> QueryT m (Maybe (Maybe MDeriv))
 procDeriv deriv@(Deriv d) = case d.hyps of
   -- matched derivation has no hypotheses, so just yield it
   List.Nil -> pure (Just (Just deriv))
@@ -160,5 +169,6 @@ procDeriv deriv@(Deriv d) = case d.hyps of
         let deriv' = Deriv d 
               { derivsRev = List.Cons hypDeriv d.derivsRev
               , hyps = hyps }
+        -- learned deriv is put at front
         learnDeriv deriv'
         pure (Just Nothing)

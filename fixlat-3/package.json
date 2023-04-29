@@ -2,6 +2,11 @@
   "dependencies": {
     "uuid": "^9.0.0"
   },
+  "scripts": {
+    "build": "npx spago build",
+    "test": "npx spago test",
+    "run": "npx spago run"
+  },
   "devDependencies": {
     "purescript": "^0.15.8",
     "spago": "^0.20.9"
