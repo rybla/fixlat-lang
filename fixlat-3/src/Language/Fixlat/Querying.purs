@@ -126,7 +126,7 @@ queryProp (Prop goal) = do
         Nothing -> \d -> do
           -- try to match goal with derivation's conclusion, then query matched
           -- derivation
-          Debug.traceM $ "[queryProp] trying to match goal with deriv: " <> pretty d
+          Debug.traceM $ "[queryProp] trying to match goal with deriv's conclusion; deriv = " <> pretty d
           matchDerivation d (Prop goal) procDeriv >>= case _ of
               -- failed to match goal with derivation's conclusion
               -- !TODO move deriv to back
