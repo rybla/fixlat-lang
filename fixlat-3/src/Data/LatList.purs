@@ -6,7 +6,7 @@ import Data.Foldable (class Foldable, foldr)
 import Data.Lattice (class Lattice, (>?))
 import Data.List (List, reverse, (:))
 import Data.Maybe (Maybe(..))
-import Data.Newtype (class Newtype)
+import Data.Newtype (class Newtype, wrap, unwrap, over)
 import Data.Traversable (class Traversable)
 import Data.Tuple.Nested (type (/\), (/\))
 
@@ -18,19 +18,11 @@ derive newtype instance Functor LatList
 derive newtype instance Foldable LatList
 derive newtype instance Traversable LatList
 
--- private
-unwrap ∷ forall a. Lattice a => LatList a → List a
-unwrap (LatList as) = as
-wrap :: forall a. Lattice a => List a -> LatList a
-wrap as = LatList as
-over :: forall a b. Lattice a => Lattice b => (List a -> List b) -> LatList a -> LatList b
-over f = unwrap >>> f >>> wrap
-
 -- | Insert `a` into a lattice set such that:
 -- | - if for any `b` in the set, `a < b`, then don't insert `a`
 -- | - for each `b` in the set, if `b < a`, then remove `b`, then finally insert `a` once
 insert :: forall a. Lattice a => a -> LatList a -> LatList a
-insert a = over $ f1 <<< foldr f2 (false /\ mempty)
+insert a = over LatList $ f1 <<< foldr f2 (false /\ mempty)
   where 
   -- if `a` is a new element, then append it
   f1 (new /\ bs) = (if new then (a : _) else identity) (reverse bs)

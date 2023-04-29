@@ -44,10 +44,9 @@ main = do
           [ Var p1 /\ LatList (List.fromFoldable 
               [ -- forall x. p2(x) |- p1(x)
                 Derivs [Deriv 
-                  let x = freshMVar Nothing in
+                  let x = freshMVar (Just (Var "x")) in
                   { label: Label "r1"
-                  , sigma: mempty
-                  , params: [Param {bind: x, quant: UnivQuant, type_: AtomicLat NatLat}]
+                  , params: [Param {bind: pure x, quant: UnivQuant, type_: AtomicLat NatLat}]
                   , derivsRev: mempty
                   , hyps: Prop {pred: Var p2, arg: VarTerm x (AtomicLat NatLat)} : Nil
                   , con: Prop {pred: Var p1, arg: VarTerm x (AtomicLat NatLat)}
@@ -56,10 +55,9 @@ main = do
           , Var p2 /\ LatList (List.fromFoldable 
               [ -- forall x. p3(x) |- p2(x)
                 Derivs [Deriv 
-                  let x = freshMVar Nothing in
+                  let x = freshMVar (Just (Var "y")) in
                   { label: Label "r2"
-                  , sigma: mempty
-                  , params: [Param {bind: x, quant: UnivQuant, type_: AtomicLat NatLat}]
+                  , params: [Param {bind: pure x, quant: UnivQuant, type_: AtomicLat NatLat}]
                   , derivsRev: mempty
                   , hyps: Prop {pred: Var p3, arg: VarTerm x (AtomicLat NatLat)} : Nil
                   , con: Prop {pred: Var p2, arg: VarTerm x (AtomicLat NatLat)}
@@ -68,10 +66,9 @@ main = do
           , Var p3 /\ LatList (List.fromFoldable 
               [ -- forall x. p3(x)
                 Derivs [Deriv 
-                  let x = freshMVar Nothing in
+                  let x = freshMVar (Just (Var "z")) in
                   { label: Label "r3"
-                  , sigma: mempty
-                  , params: [Param {bind: x, quant: UnivQuant, type_: AtomicLat NatLat}]
+                  , params: [Param {bind: pure x, quant: UnivQuant, type_: AtomicLat NatLat}]
                   , derivsRev: mempty
                   , hyps: Nil
                   , con: Prop {pred: Var p3, arg: VarTerm x (AtomicLat NatLat)}

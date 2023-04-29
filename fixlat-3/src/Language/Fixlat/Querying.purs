@@ -5,6 +5,7 @@
 
 module Language.Fixlat.Querying where
 
+import Data.Tuple.Nested
 import Language.Fixlat.Deriv
 import Language.Fixlat.Grammar
 import Language.Fixlat.MVar
@@ -12,15 +13,17 @@ import Prelude
 import Prim hiding (Type)
 
 import Control.Monad.Reader (class MonadReader, ReaderT, asks, local, runReader)
-import Control.Monad.State (StateT, gets, modify_)
+import Control.Monad.State (StateT, get, gets, modify_)
 import Data.Bitraversable (rtraverse)
 import Data.Bug (bug)
-import Data.Foldable (foldM, foldr)
-import Data.LatList (LatList, unwrap)
+import Data.Either (Either(..))
+import Data.Foldable (foldM, foldMap, foldr, intercalate)
+import Data.LatList (LatList)
 import Data.LatList as LatList
 import Data.List as List
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
+import Data.Newtype (unwrap)
 import Data.Traversable (sequence)
 import Debug as Debug
 import Language.Fixlat.Deriv as Deriv
@@ -71,11 +74,15 @@ instance Show Err where show (Err str) = "[querying error] " <> show str
 -- | Localize the parameters of a rule by introducing them into the query
 -- | context.
 localMDeriv :: forall m a. Monad m => MDeriv -> QueryT m a -> QueryT m a
-localMDeriv (Deriv deriv) = local \ctx ->
-  ctx {mvarQuants = foldr (\(Param p) -> Map.insert p.bind p.quant) ctx.mvarQuants deriv.params}
+localMDeriv (Deriv deriv) = local \ctx -> do
+  let introParam (Param p) = case p.bind of
+        Left _ -> identity
+        Right x -> Map.insert x p.quant
+  ctx {mvarQuants = foldr introParam ctx.mvarQuants deriv.params}
 
 learnDeriv :: forall m. Monad m => MDeriv -> QueryT m Unit
 learnDeriv (Deriv d) = do 
+  Debug.traceM $ "[learnDeriv] deriv = " <> pretty (Deriv d)
   let Prop con = d.con
   modify_ \st -> st 
     { predLatLists = Map.alter
@@ -85,6 +92,11 @@ learnDeriv (Deriv d) = do
         )
         con.pred st.predLatLists
     }
+  do
+    st <- get
+    Debug.traceM $ "[learnDeriv] predLatLists: " <>
+      -- intercalate "\n" ((Map.toUnfoldable st.predLatLists :: Array _) <#> unwrap >>> map (unwrap >>> map pretty >>> intercalate ", ") >>> intercalate "\n")
+      foldMap ("\n" <> _) ((Map.toUnfoldable st.predLatLists :: Array _) <#> \(x /\ latList) -> "pred " <> pretty x <> ":" <> foldMap (\ds -> "\n  - " <> intercalate ", " (pretty <$> unwrap ds)) latList)
 
 -- | Find a unifying substitution where the expected prop is implied by the
 -- | candidate prop (i.e. `expectedProp <= candidateProp`).

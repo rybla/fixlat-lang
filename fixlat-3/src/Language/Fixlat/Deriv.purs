@@ -1,16 +1,19 @@
 module Language.Fixlat.Deriv where
 
+import Data.Either.Nested
 import Data.Tuple.Nested
 import Language.Fixlat.Grammar
 import Prelude
 import Text.Pretty
-import Data.Bifunctor (rmap)
+
 import Control.Monad.Reader (class MonadReader, ReaderT, ask, asks, local, runReaderT)
 import Control.Monad.State (class MonadState, StateT, get, gets, modify_, put, runStateT)
 import Control.MonadPlus (class MonadPlus)
 import Control.Plus (empty)
 import Data.Array as Array
+import Data.Bifunctor (rmap)
 import Data.Bug (bug)
+import Data.Either (Either(..))
 import Data.Foldable (class Foldable, foldM, foldMap, foldr, intercalate, sequence_, traverse_)
 import Data.Generic.Rep (class Generic)
 import Data.Lattice (class JoinSemilattice, class Lattice, class MeetSemilattice, class PartialOrd, comparePartial)
@@ -23,6 +26,7 @@ import Data.Show.Generic (genericShow)
 import Data.Traversable (class Traversable)
 import Data.Tuple (snd)
 import Data.Tuple.Nested ((/\))
+import Partial.Unsafe (unsafeCrashWith)
 import Record as R
 import Text.Pretty (class Pretty)
 import Type.Proxy (Proxy(..))
@@ -30,8 +34,7 @@ import Type.Proxy (Proxy(..))
 -- | A derivation is a tree.
 data Deriv xt = Deriv
   { label :: Label
-  , sigma :: Array (xt /\ LTerm xt)
-  , params :: Array (Param xt)
+  , params :: Array (Param ((xt /\ LTerm xt) \/ xt))
   , derivsRev :: List (Deriv xt)
   , hyps :: List (Prop CLat xt)
   , con :: Prop CLat xt
@@ -40,13 +43,19 @@ data Deriv xt = Deriv
 instance Pretty xt => Pretty (Deriv xt) where
   pretty (Deriv d) =
     pretty d.label <+>
-    "(" <> intercalate ", " ((d.sigma <#> \(x /\ t) -> pretty x <> "=" <> pretty t) <> (pretty <$> d.params)) <> ")" <+> 
+    "(" <> intercalate ", " (d.params <#> prettyParam) <> ")" <+> 
     "{" <>
-      (if List.null d.derivsRev then "" else "proven[" <> intercalate ", " (pretty <$> List.reverse d.derivsRev) <> "]") <+>
+      -- proven
+      (if List.null d.derivsRev then "" else "[" <> intercalate ", " (pretty <$> List.reverse d.derivsRev) <> "]") <+>
+      -- to prove
       (if List.null d.hyps then "" else intercalate ", " (pretty <$> d.hyps)) <+>
       "|-" <+>
       pretty d.con <>
     "}"
+    where
+    prettyParam (Param p) = case p.bind of
+      Left (x /\ t) -> pretty p.quant <+> pretty x <> "=" <> pretty t
+      Right x -> pretty p.quant <+> pretty x <> ":" <+> pretty p.type_
 
 derive instance Generic (Deriv xt) _
 instance Show xt => Show (Deriv xt) where show x = genericShow x
@@ -145,7 +154,10 @@ unifyLeDeriv deriv1 deriv2 = do
   Deriv d1 <- substDeriv deriv1 <$> totalSigma
   Deriv d2 <- substDeriv deriv2 <$> totalSigma
   -- intro quantifications
-  local (flip (foldr (\(Param p) -> Map.insert p.bind p.quant)) (d1.params <> d2.params)) do
+  let introParam (Param p) = case p.bind of
+        Left _ -> identity
+        Right x -> Map.insert x p.quant
+  local (flip (foldr introParam) (d1.params <> d2.params)) do
     -- check that each d1 hyp is MORE general than at least one d2 hyp
     flip traverse_ d1.hyps \hyp1 ->
       anyUnify (d2.hyps <#> \hyp2 -> unifyLeLProp hyp2 hyp1)
@@ -186,8 +198,13 @@ unifyLeLTerm term1 term2 = do
 
 substDeriv :: forall xt. Ord xt => Deriv xt -> Map.Map xt (LTerm xt) -> Deriv xt
 substDeriv (Deriv d) sigma = Deriv d
-  { params = Array.filter ((\(Param p) -> p.bind) >>> (flip Map.member sigma) >>> not) d.params
-  , sigma = (rmap (flip substLTerm sigma) <$> d.sigma) <> Map.toUnfoldable sigma
+  { params = d.params <#> \(Param p) -> case p.bind of
+      Left (x /\ t) -> case Map.lookup x sigma of
+        Nothing -> Param p
+        Just t' -> unsafeCrashWith "attempted to substitute a parameter in a deriv that's already been substituted"
+      Right x -> case Map.lookup x sigma of
+        Nothing -> Param p
+        Just t -> Param p {bind = Left (x /\ t)}
   , derivsRev = flip substDeriv sigma <$> d.derivsRev
   , hyps = flip substLProp sigma <$> d.hyps
   , con = substLProp d.con sigma
@@ -225,8 +242,7 @@ instance Ord xt => Lattice (Derivs xt)
 fromRuleToDeriv :: forall xt. LRule xt -> Deriv xt
 fromRuleToDeriv (Rule rule) = Deriv
   { label: rule.label
-  , sigma: mempty
-  , params: rule.params
+  , params: rule.params <#> map pure
   , derivsRev: mempty
   , hyps: List.fromFoldable rule.hyps
   , con: rule.con

@@ -22,7 +22,8 @@ derive instance Newtype MVar _
 derive newtype instance Show MVar
 instance Pretty MVar where 
   pretty (MVar (Nothing /\ uuid)) = "?" <> String.take 3 (UUID.toString uuid)
-  pretty (MVar (Just x /\ uuid)) = "?" <> pretty x <> "#" <> String.take 3 (UUID.toString uuid)
+  -- !TODO it's so cluttering to have this, so, not sure if its necessary
+  pretty (MVar (Just x /\ uuid)) = "?" <> pretty x -- <> "#" <> String.take 3 (UUID.toString uuid)
 derive newtype instance Eq MVar
 derive newtype instance Ord MVar
 
