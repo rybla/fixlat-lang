@@ -5,7 +5,7 @@
   },
   "scripts": {
     "build": "npx spago build --source-maps",
-    "test": "rm -f querying-snapshot*.html && npm run build && npx spago test",
+    "test": "rm -f snapshots/*.html && npm run build && npx spago test",
     "run": "npm run build && npx spago run"
   },
   "devDependencies": {
