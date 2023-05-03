@@ -3,11 +3,14 @@ module Language.Fixlat.Grammar where
 import Prelude
 import Prim hiding (Type)
 
+import Data.Array as Array
+import Data.Array.NonEmpty as ArrayNE
 import Data.Bifoldable (class Bifoldable, bifoldMap, bifoldl, bifoldr)
 import Data.Bifunctor (class Bifunctor, rmap)
 import Data.Bitraversable (class Bitraversable, rtraverse)
 import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
+import Data.Maybe (Maybe(..), fromJust)
 import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
 import Data.Traversable (class Foldable, class Traversable, intercalate, traverse)
@@ -15,10 +18,11 @@ import Text.Pretty (class Pretty, pretty, (<+>))
 
 newtype Label = Label String
 derive instance Generic Label _
-instance Show Label where show x = genericShow x
-instance Pretty Label where pretty (Label str) = str
+derive instance Newtype Label _
+derive newtype instance Show Label
 derive newtype instance Eq Label
 derive newtype instance Ord Label
+instance Pretty Label where pretty (Label str) = str
 
 newtype Var = Var String
 derive instance Generic Var _
@@ -103,7 +107,7 @@ instance Traversable (Rule y) where
 newtype Param xt = Param { quant :: Quant, bind :: xt, type_ :: CLat }
 
 instance Pretty xt => Pretty (Param xt) where
-  pretty (Param p) = pretty p.quant <+> "(" <> pretty p.bind <+> ":" <+> pretty p.type_ <> ")"
+  pretty (Param p) = pretty p.quant <+> "(" <> pretty p.quant <+> pretty p.bind <+> ":" <+> pretty p.type_ <> ")"
 
 derive instance Newtype (Param xt) _
 derive newtype instance Show xt => Show (Param xt)
@@ -182,13 +186,26 @@ derive instance Foldable Lat
 derive instance Traversable Lat
 
 data AtomicLat
-  = NatLat 
+  = UnitLat
+  | IntLat
 
 instance Pretty AtomicLat where
-  pretty NatLat = "Nat"
+  pretty UnitLat = "Unit"
+  pretty IntLat = "Int"
 
 derive instance Generic AtomicLat _
 instance Show AtomicLat where show x = genericShow x
+
+unitLat = AtomicLat UnitLat
+intLat = AtomicLat IntLat
+
+-- folds right
+prodsLat :: forall xy. Partial => Array (Lat xy) -> Lat xy
+prodsLat = ArrayNE.fromArray >>> fromJust >>> ArrayNE.foldr1 ProdLat
+
+-- folds right
+sumsLat :: forall xy. Partial => Array (Lat xy) -> Lat xy
+sumsLat = ArrayNE.fromArray >>> fromJust >>> ArrayNE.foldr1 SumLat
 
 -- | Type
 data Type xy
@@ -213,9 +230,11 @@ derive instance Foldable Type
 derive instance Traversable Type
 
 data AtomicType
-  = NatType
+  = UnitType
+  | NatType
 
 instance Pretty AtomicType where
+  pretty UnitType = "Unit"
   pretty NatType = "Nat"
 
 derive instance Generic AtomicType  _
@@ -228,20 +247,32 @@ data Term y xt
   -- product
   | ProdTerm (Term y xt) (Term y xt) y
   -- !TODO not sure if i wanna add these, cuz then i have to deal with more complicated forms of unification
-  -- | Proj1Term (Term y xt) y
-  -- | Proj2Term (Term y xt) y
+  | Proj1Term (Term y xt) y
+  | Proj2Term (Term y xt) y
   -- sum
   | Inj1Term (Term y xt) y
   | Inj2Term (Term y xt) y
   -- !TODO not sure if i wanna add this, cuz then i have to deal with more complicated forms of unification
   -- | ElimTerm (Term y xt) CX (Term y xt) CX (Term y xt) y 
 
+termAnn :: forall y xt. Term y xt -> y
+termAnn (AtomicTerm _ y) = y
+termAnn (VarTerm _ y) = y
+termAnn (ProdTerm _ _ y) = y
+termAnn (Proj1Term _ y) = y
+termAnn (Proj2Term _ y) = y
+termAnn (Inj1Term _ y) = y
+termAnn (Inj2Term _ y) = y
+
+
 instance Pretty xt => Pretty (Term y xt) where
   pretty (AtomicTerm at _) = pretty at
   pretty (VarTerm x _) = pretty x
   pretty (ProdTerm t1 t2 _) = "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
-  pretty (Inj1Term t _) = "(inj1 " <> pretty t <> ")"
-  pretty (Inj2Term t _) = "(inj1 " <> pretty t <> ")"
+  pretty (Proj1Term t _) = "(π1" <+> pretty t <> ")"
+  pretty (Proj2Term t _) = "(π2" <+> pretty t <> ")"
+  pretty (Inj1Term t _) = "(μ1 " <> pretty t <> ")"
+  pretty (Inj2Term t _) = "(μ2 " <> pretty t <> ")"
 
 derive instance Generic (Term y xt) _
 instance (Show y, Show xt) => Show (Term y xt) where show x = genericShow x
@@ -260,14 +291,23 @@ instance Traversable (Term y) where
   sequence x = traverse identity x
 
 data AtomicTerm
-  = NatTerm Int
+  = UnitTerm
+  | NatTerm Int
 
 instance Pretty AtomicTerm where
+  pretty UnitTerm = "unit"
   pretty (NatTerm x) = show x
 
 derive instance Generic AtomicTerm _
 instance Show AtomicTerm where show x = genericShow x
 instance Eq AtomicTerm where eq x y = genericEq x y
+
+unitTerm = AtomicTerm UnitTerm
+natTerm n = AtomicTerm (NatTerm n)
+
+prodsTerm :: forall y xt. Partial => (y -> y -> y) -> Array (Term y xt) -> Term y xt
+prodsTerm f = ArrayNE.fromArray >>> fromJust >>> ArrayNE.foldr1 \t1 t2 ->
+  ProdTerm t1 t2 (f (termAnn t1) (termAnn t2))
 
 -- | Aliases
 

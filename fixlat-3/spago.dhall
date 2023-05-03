@@ -30,6 +30,7 @@ to generate this file without the comments in this block.
   , "prelude"
   , "profunctor"
   , "record"
+  , "refs"
   , "strings"
   , "transformers"
   , "tuples"

@@ -5,6 +5,7 @@ import Prelude
 import Data.Foldable (class Foldable, foldr)
 import Data.Lattice (class Lattice, (>?))
 import Data.List (List, reverse, (:))
+import Data.List as List
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, wrap, unwrap, over)
 import Data.Traversable (class Traversable)
@@ -18,14 +19,18 @@ derive newtype instance Functor LatList
 derive newtype instance Foldable LatList
 derive newtype instance Traversable LatList
 
+empty :: forall a. LatList a
+empty = LatList List.Nil
+
 -- | Insert `a` into a lattice set such that:
--- | - if for any `b` in the set, `a < b`, then don't insert `a`
--- | - for each `b` in the set, if `b < a`, then remove `b`, then finally insert `a` once
-insert :: forall a. Lattice a => a -> LatList a -> LatList a
-insert a = over LatList $ f1 <<< foldr f2 (false /\ mempty)
+-- | - if for any `b` in the set, `a < b`, then Nothing
+-- | - for each `b` in the set, if `b < a`, then Just remove `b` and insert `a` once
+insert :: forall a. Lattice a => a -> LatList a -> Maybe (LatList a)
+insert a = map LatList <<< f1 <<< foldr f2 (false /\ mempty) <<< unwrap
   where 
   -- if `a` is a new element, then append it
-  f1 (new /\ bs) = (if new then (a : _) else identity) (reverse bs)
+  f1 :: Boolean /\ List a -> Maybe (List a)
+  f1 (new /\ bs) = (if new then Just <<< (a : _) else const Nothing) (reverse bs)
 
   f2 :: a -> (Boolean /\ List a) -> (Boolean /\ List a)
   f2 b (new /\ bs) = case a >? b of 
