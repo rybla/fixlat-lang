@@ -91,10 +91,15 @@ main :: Effect Unit
 main = unsafePartial do
   let
     -- Nat ::= μ nat . nat + unit
-    natLat = FixLat (Var "nat") (SumLat (VarLat (Var "nat")) unitLat) :: CLat
-    zeroTerm = Inj2Term (unitTerm (AtomicLat UnitLat)) natLat
+    -- natLat = FixLat (Var "nat") (SumLat (VarLat (Var "nat")) unitLat) :: CLat
+    natLat = VarLat (Var "nat") :: CLat
+    
+    -- zeroTerm = Inj2Term (unitTerm (AtomicLat UnitLat)) natLat
+    zeroTerm = VarTerm (Left (Var "0")) natLat
+
     sucTerm :: forall xt. Term _ xt → Term _ xt
     sucTerm n = Inj1Term n natLat
+    
     addProp a b c = Prop {pred: Var "add", arg: prodsTerm ProdLat [a, b, c]}
   let 
     ctx :: Q.Ctx
@@ -154,14 +159,15 @@ main = unsafePartial do
           ]
       }
 
-  -- exists result . zero + suc zero = result
+  -- exists ?result . a + b = ?result
+  let a = sucTerm zeroTerm
+  let b = sucTerm (sucTerm (sucTerm zeroTerm))
   let rule1 = Rule do
         let result = freshMVar (Just (Var "result"))
         { label: Label "add-test1"
         , params: [Param {quant: ExistQuant, bind: Right result, type_: natLat}]
         , hyps: []
-        -- , con: Prop {pred: Var "add", arg: prodsTerm ProdLat [zeroTerm, zeroTerm, zeroTerm]}
-        , con: Prop {pred: Var "add", arg: prodsTerm ProdLat [zeroTerm, sucTerm (sucTerm (sucTerm zeroTerm)), VarTerm (Right result) natLat]}
+        , con: Prop {pred: Var "add", arg: prodsTerm ProdLat [a, b, VarTerm (Right result) natLat]}
         }
 
   void $ flip runStateT st >>> flip runReaderT ctx $ queryInitRule rule1
