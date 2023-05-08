@@ -49,8 +49,6 @@ d3.forceSimulation(data.nodes)
       .attr('y2', d => d.target.y)
 
     nodes
-      // .attr('x', d => d.x)
-      // .attr('y', d => d.y)
       .attr('transform', d => `translate(${d.x}, ${d.y})`)
       .attr('dy', d => 5)
   })
