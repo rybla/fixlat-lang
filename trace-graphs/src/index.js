@@ -10,7 +10,18 @@ console.log(data)
 const width = 600;
 const height = 600;
 
-var svg = d3.select('svg')
+var zoom = d3.zoom()
+  .on('zoom', e => {
+    d3.select('svg g')
+      .attr('transform', e.transform)
+  })
+
+d3.select('svg').call(zoom)
+
+var svg = d3.select('svg g')
+  .attr('width', width)
+  .attr('height', height)
+  .call(zoom)
 
 var links = svg.selectAll('.link')
   .data(data.links)
