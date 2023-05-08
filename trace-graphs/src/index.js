@@ -1,121 +1,107 @@
-import * as d3 from 'd3'
+import go from 'gojs'
 
-// import data from './graphs/test1.json'
+function init() {
 
-// import gen from './generation/gen1'
-// var data = gen()
+  // Since 2.2 you can also author concise templates with method chaining instead of GraphObject.make
+  // For details, see https://gojs.net/latest/intro/buildingObjects.html
+  const $ = go.GraphObject.make;  // for conciseness in defining templates
 
-import gen from './generation/add'
-var data = gen()
+  let myDiagram =
+    $(go.Diagram, "myDiagramDiv",  // must name or refer to the DIV HTML element
+      {
+        initialAutoScale: go.Diagram.Uniform,  // an initial automatic zoom-to-fit
+        contentAlignment: go.Spot.Center,  // align document to the center of the viewport
+        layout:
+          $(go.ForceDirectedLayout,  // automatically spread nodes apart
+            { maxIterations: 200, defaultSpringLength: 30, defaultElectricalCharge: 100 })
+      });
 
+  // define each Node's appearance
+  myDiagram.nodeTemplate =
+    $(go.Node, "Auto",  // the whole node panel
+      { locationSpot: go.Spot.Center },
+      // define the node's outer shape, which will surround the TextBlock
+      $(go.Shape, "Rectangle",
+        { fill: $(go.Brush, "Linear", { 0: "rgb(254, 201, 0)", 1: "rgb(254, 162, 0)" }), stroke: "black" }),
+      $(go.TextBlock,
+        { font: "bold 10pt helvetica, bold arial, sans-serif", margin: 4 },
+        new go.Binding("text", "text"))
+    );
 
-// import gen from './generation/gen2'
-// var data = gen()
+  // replace the default Link template in the linkTemplateMap
+  myDiagram.linkTemplate =
+    $(go.Link,  // the whole link panel
+      $(go.Shape,  // the link shape
+        { stroke: "black" }),
+      $(go.Shape,  // the arrowhead
+        { toArrow: "standard", stroke: null }),
+      $(go.Panel, "Auto",
+        $(go.Shape,  // the label background, which becomes transparent around the edges
+          {
+            fill: $(go.Brush, "Radial", { 0: "rgb(240, 240, 240)", 0.3: "rgb(240, 240, 240)", 1: "rgba(240, 240, 240, 0)" }),
+            stroke: null
+          }),
+        $(go.TextBlock,  // the label text
+          {
+            textAlign: "center",
+            font: "10pt helvetica, arial, sans-serif",
+            stroke: "#555555",
+            margin: 4
+          },
+          new go.Binding("text", "text"))
+      )
+    );
 
-console.log(data)
+  // create the model for the concept map
+  var nodeDataArray = [
+    { key: 1, text: "Concept Maps" },
+    { key: 2, text: "Organized Knowledge" },
+    { key: 3, text: "Context Dependent" },
+    { key: 4, text: "Concepts" },
+    { key: 5, text: "Propositions" },
+    { key: 6, text: "Associated Feelings or Affect" },
+    { key: 7, text: "Perceived Regularities" },
+    { key: 8, text: "Labeled" },
+    { key: 9, text: "Hierarchically Structured" },
+    { key: 10, text: "Effective Teaching" },
+    { key: 11, text: "Crosslinks" },
+    { key: 12, text: "Effective Learning" },
+    { key: 13, text: "Events (Happenings)" },
+    { key: 14, text: "Objects (Things)" },
+    { key: 15, text: "Symbols" },
+    { key: 16, text: "Words" },
+    { key: 17, text: "Creativity" },
+    { key: 18, text: "Interrelationships" },
+    { key: 19, text: "Infants" },
+    { key: 20, text: "Different Map Segments" }
+  ];
+  var linkDataArray = [
+    { from: 1, to: 2, text: "represent" },
+    { from: 2, to: 3, text: "is" },
+    { from: 2, to: 4, text: "is" },
+    { from: 2, to: 5, text: "is" },
+    { from: 2, to: 6, text: "includes" },
+    { from: 2, to: 10, text: "necessary\nfor" },
+    { from: 2, to: 12, text: "necessary\nfor" },
+    { from: 4, to: 5, text: "combine\nto form" },
+    { from: 4, to: 6, text: "include" },
+    { from: 4, to: 7, text: "are" },
+    { from: 4, to: 8, text: "are" },
+    { from: 4, to: 9, text: "are" },
+    { from: 5, to: 9, text: "are" },
+    { from: 5, to: 11, text: "may be" },
+    { from: 7, to: 13, text: "in" },
+    { from: 7, to: 14, text: "in" },
+    { from: 7, to: 19, text: "begin\nwith" },
+    { from: 8, to: 15, text: "with" },
+    { from: 8, to: 16, text: "with" },
+    { from: 9, to: 17, text: "aids" },
+    { from: 11, to: 18, text: "show" },
+    { from: 12, to: 19, text: "begins\nwith" },
+    { from: 17, to: 18, text: "needed\nto see" },
+    { from: 18, to: 20, text: "between" }
+  ];
+  myDiagram.model = new go.GraphLinksModel(nodeDataArray, linkDataArray);
+}
 
-const width = 600;
-const height = 600;
-
-var zoom = d3.zoom()
-  .on('zoom', e => {
-    d3.select('svg g')
-      .attr('transform', e.transform)
-  })
-
-d3.select('svg').call(zoom)
-
-var svg = d3.select('svg g')
-  .attr('width', width)
-  .attr('height', height)
-  .call(zoom)
-
-const markerBoxWidth = 80
-const markerBoxHeight = 20
-const refX = markerBoxWidth / 2
-const refY = markerBoxHeight / 2
-const markerWidth = markerBoxWidth / 2
-const markerHeight = markerBoxHeight / 2
-const arrowPoints = [[0, 5], [0, 15], [10, 10]]
-
-svg.append('defs').append('marker')
-  .attr('id', 'arrowhead')
-  .attr('viewBox', [0, 0, markerBoxWidth, markerBoxHeight])
-  .attr('refX', refX)
-  .attr('refY', refY)
-  .attr('markerWidth', markerBoxWidth)
-  .attr('markerHeight', markerBoxHeight)
-  .attr('orient', 'auto-start-reverse')
-  .append('path')
-  .attr('d', d3.line()(arrowPoints))
-  .attr('stroke', 'black')
-
-var links = svg.selectAll('.link')
-  .data(data.links)
-  // .enter()
-  // .append('line')
-  // .attr('marker-end', 'url(#arrowhead)')
-
-var linkLines = links.enter().append('line')
-
-var linkLabels = links.enter().append('text').text(d => d.label ?? "")
-
-// .attr('marker-middle', 'url(#arrowhead)')
-// .attr('marker-start', 'url(#arrowhead)')
-
-var nodes = svg.selectAll('.node')
-  .data(data.nodes)
-  .enter()
-  .append('g')
-
-// nodes.append('circle').attr('r', 20)
-nodes.append('rect')
-  .attr('width', 80)
-  .attr('height', 40)
-  .attr('x', -40)
-  .attr('y', -20)
-nodes.append('text').text(d => {
-  if (d.label instanceof Array && d.label.length > 0) {
-    return d.label[0]
-  }
-  return d.label
-})
-nodes.append('text').text(d => {
-  if (d.label instanceof Array && d.label.length > 1) {
-    return d.label[1]
-  }
-  return ""
-})
-  .attr('y', 12)
-nodes.append('text').text(d => {
-  if (d.label instanceof Array && d.label.length > 2) {
-    return d.label[2]
-  }
-  return ""
-})
-  .attr('y', 24)
-
-d3.forceSimulation(data.nodes)
-  .force('charge', d3.forceManyBody().strength(-1000))
-  .force('center', d3.forceCenter(width / 2, height / 2))
-  .force('link', d3.forceLink().distance(200).links(data.links))
-  .on('tick', () => {
-    linkLines
-      .attr('x1', d => d.source.x)
-      .attr('y1', d => d.source.y)
-      .attr('x2', d => d.target.x)
-      .attr('y2', d => d.target.y)
-
-    linkLabels
-      .attr('transform', d => {
-        let x = (d.source.x + d.target.x)/2
-        let y = (d.source.y + d.target.y)/2
-        const dsty = d.source.y - d.target.y;
-        let angle = Math.atan2(dsty, (d.source.x - d.target.x)) * 180 / Math.PI;
-        return `translate(${x}, ${y})rotate(${angle + 180})`
-      })
-
-    nodes
-      .attr('transform', d => `translate(${d.x}, ${d.y})`)
-      .attr('dy', d => 5)
-  })
+window.addEventListener('DOMContentLoaded', init);

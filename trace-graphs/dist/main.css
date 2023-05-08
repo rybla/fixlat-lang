@@ -10,14 +10,13 @@ body {
 
 html, body {
   margin: 0;
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
+  padding: 1rem;
+  /* overflow: hidden; */
 }
 
 #content {
-  width: 600px;
-  height: 600px;
+  width: 1200px;
+  height: 700px;
   border: 1px solid black;
 }
 
@@ -29,7 +28,6 @@ circle {
 
 rect {
   fill: rgba(95, 158, 160, 1);
-  fill: rgba(95, 158, 160, 0.9);
 }
 
 line {
@@ -42,3 +40,20 @@ text {
   fill: black;
   font-size: 12px;
 }
+
+text.wants {
+  fill: red;
+}
+
+line.wants {
+  stroke: red;
+}
+
+
+text.generalizes {
+  fill: blue;
+}
+line.generalizes {
+  stroke: blue;
+}
+
