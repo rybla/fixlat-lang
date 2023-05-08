@@ -1,13 +1,11 @@
 {
   "nodes": [
     {
-      "name": "Peter",
-      "label": "Person",
+      "label": "A",
       "id": 1
     },
     {
-      "name": "Michael",
-      "label": "Person",
+      "label": "B",
       "id": 2
     }
   ],
@@ -15,8 +13,7 @@
     {
       "source": 1,
       "target": 2,
-      "type": "knows",
-      "since": 2010
+      "label": "A -> B"
     }
   ]
 }

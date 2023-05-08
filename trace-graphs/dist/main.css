@@ -8,45 +8,27 @@ body {
   padding: 1rem;
 }
 
-#display {
+#content {
   width: 600px;
   height: 600px;
   border: 1px solid black;
 }
 
-/* link */
+/* svg */
 
-line.link {
-  marker-end: url(#arrowhead);
+circle {
+  fill: cadetblue;
+  /* border: 1px solid black; */
+
 }
 
-line.link>title {}
-
-/* edgepath */
-
-path.edgepath {
-  fill-opacity: 1.0;
-  stroke-opacity: 1.0;
-  pointer-events: none;
+line {
+  stroke: black;
 }
 
-/* edgelabel */
-
-text.edgelabel {
-  pointer-events: none;
-  font-size: 10pt;
-  fill: green;
-}
-
-text.edgelabel>textPath {
+text {
   text-anchor: middle;
-  pointer-events: none; 
+  font-family: "Helvetica Neue", Helvetica, sans-serif;
+  fill: black;
+  font-size: 12px;
 }
-
-/* node */
-
-g.node {}
-
-g.node>circle {}
-
-g.node>title {}
