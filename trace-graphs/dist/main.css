@@ -8,6 +8,13 @@ body {
   padding: 1rem;
 }
 
+html, body {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
 #content {
   width: 600px;
   height: 600px;
@@ -17,9 +24,12 @@ body {
 /* svg */
 
 circle {
-  fill: cadetblue;
-  /* border: 1px solid black; */
+  fill: rgba(95, 158, 160, 1);
+}
 
+rect {
+  fill: rgba(95, 158, 160, 1);
+  fill: rgba(95, 158, 160, 0.9);
 }
 
 line {
@@ -27,7 +37,7 @@ line {
 }
 
 text {
-  text-anchor: middle;
+  text-anchor: middle;  
   font-family: "Helvetica Neue", Helvetica, sans-serif;
   fill: black;
   font-size: 12px;
