@@ -1,0 +1,52 @@
+html {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  padding: 1rem;
+}
+
+#display {
+  width: 600px;
+  height: 600px;
+  border: 1px solid black;
+}
+
+/* link */
+
+line.link {
+  marker-end: url(#arrowhead);
+}
+
+line.link>title {}
+
+/* edgepath */
+
+path.edgepath {
+  fill-opacity: 1.0;
+  stroke-opacity: 1.0;
+  pointer-events: none;
+}
+
+/* edgelabel */
+
+text.edgelabel {
+  pointer-events: none;
+  font-size: 10pt;
+  fill: green;
+}
+
+text.edgelabel>textPath {
+  text-anchor: middle;
+  pointer-events: none; 
+}
+
+/* node */
+
+g.node {}
+
+g.node>circle {}
+
+g.node>title {}

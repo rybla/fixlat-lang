@@ -1,0 +1,22 @@
+{
+  "nodes": [
+    {
+      "name": "Peter",
+      "label": "Person",
+      "id": 1
+    },
+    {
+      "name": "Michael",
+      "label": "Person",
+      "id": 2
+    }
+  ],
+  "links": [
+    {
+      "source": 1,
+      "target": 2,
+      "type": "knows",
+      "since": 2010
+    }
+  ]
+}

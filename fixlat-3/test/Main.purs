@@ -91,11 +91,11 @@ main :: Effect Unit
 main = unsafePartial do
   let
     -- Nat ::= μ nat . nat + unit
-    -- natLat = FixLat (Var "nat") (SumLat (VarLat (Var "nat")) unitLat) :: CLat
-    natLat = VarLat (Var "nat") :: CLat
+    natLat = FixLat (Var "nat") (SumLat (VarLat (Var "nat")) unitLat) :: CLat
+    -- natLat = VarLat (Var "nat") :: CLat
     
-    -- zeroTerm = Inj2Term (unitTerm (AtomicLat UnitLat)) natLat
-    zeroTerm = VarTerm (Left (Var "0")) natLat
+    zeroTerm = Inj2Term (unitTerm (AtomicLat UnitLat)) natLat
+    -- zeroTerm = VarTerm (Left (Var "0")) natLat
 
     sucTerm :: forall xt. Term _ xt → Term _ xt
     sucTerm n = Inj1Term n natLat
@@ -145,7 +145,7 @@ main = unsafePartial do
                   , params:   
                       [ Param {quant: UnivQuant, bind: a, type_: natLat}
                       , Param {quant: UnivQuant, bind: b, type_: natLat}
-                      , Param {quant: ExistQuant, bind: c, type_: natLat}
+                      , Param {quant: UnivQuant, bind: c, type_: natLat}
                       ]
                   , derivsRev: mempty
                   , hyps: List.fromFoldable [ 
