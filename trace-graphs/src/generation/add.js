@@ -1,79 +1,55 @@
-var freshDerivId = -1
-
-var nodes = []
-var links = []
-
-// returns new deriv's id
-function makeAxiom(label) {
-  let node = {
-    label: label,
-    id: ++freshDerivId
-  }
-  nodes.push(node)
-
-  return node.id
-}
-
-function makeInstance(label, generalId) {
-  let node = {
-    label: label,
-    id: ++freshDerivId
-  }
-  nodes.push(node)
-
-  links.push({
-    source: generalId,
-    target: node.id,
-    label: ["generalizes"]
-  })
-
-  return node.id
-}
-
-function makeApplication(label, wantIds) {
-  let node = {
-    label: label,
-    id: ++freshDerivId
-  }
-  nodes.push(node)
-
-  wantIds.forEach(wantId => {
-    links.push({
-      source: node.id,
-      target: wantId,
-      label: "wants"
-    })
-  })
-
-  return node.id
-}
+import { nodes, links, makeAxiom, makeInstance, makeApplication } from './rule'
 
 // compute trace of add
-function trace(a, b) {
-  const zero = makeAxiom(["∀ x", "0 + x = x"])
-  const suc = makeAxiom(["∀ x y z", "x + Sy = Sz", "⊢ x + y = z"])
+function trace(a0, b0) {
+  const zero = makeAxiom({
+    vars: ["∀x"],
+    con: "x + 0 = x"
+  })
+  const suc = makeAxiom({
+    vars: ["∀x", "∀y", "∀z"],
+    hyps: ["x + Sy = Sz"],
+    con: "x + y = z"
+  })
 
-  if (b == 0) {
-    makeInstance(`${a} + 0 = ${a}`, zero)
-    // makeApplication(`${a} + 0 = ${a}`, [zero])
-  } else {
-    let pred = makeApplication(["∃ z", `${a} + S${b-1} = Sz`], [suc])
-    while (b > 0) {
-      b--
-      pred = makeApplication(["∃ z", `${a} + ${b} = z`], [suc, pred])
+  // Returns the id of the node `a + b = z` where `∃z`.
+  function add(a, b) {
+    if (b > 0) {
+      let bp = b - 1
+      let suc_a_bp = makeInstance(
+        {
+          vars: [`∃z`],
+          hyps: [`${a} + ${bp} = z`],
+          con: `${a} + ${b} = Sz`,
+        },
+        suc,
+        [add(a, b - 1)]
+      )
+
+      return makeApplication(
+        {
+          vars: [`∃z`],
+          con: `${a} + ${b} = z`
+        },
+        [suc_a_bp]
+      )
+    } else {
+      return makeInstance(
+        {
+          con: `${a} + ${b} = ${a}`,
+        },
+        zero,
+        []
+      )
     }
-    let base = makeInstance(`${a} + 0 = ${a}`, zero)
-    makeApplication(`${a} + ${b} = ${a + b}`, [base, pred])
   }
 
+  add(a0, b0)
 }
 
-export default function gen() {
-  trace(3, 5)
+export default function generateData() {
+  trace(9, 5)
 
-  return {
-    nodes: nodes,
-    links: links
-  }
+  return { nodes, links }
 }
 

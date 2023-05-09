@@ -1,5 +1,13 @@
 import go from 'gojs'
 
+// import generateData from './generation/add'
+import generateData from './generation/dijkstra'
+import { data } from './generation/rule'
+
+const maxIterations = 500
+const defaultElectricalCharge = 100
+const defaultSpringLength = 10
+
 function init() {
 
   // Since 2.2 you can also author concise templates with method chaining instead of GraphObject.make
@@ -13,7 +21,7 @@ function init() {
         contentAlignment: go.Spot.Center,  // align document to the center of the viewport
         layout:
           $(go.ForceDirectedLayout,  // automatically spread nodes apart
-            { maxIterations: 200, defaultSpringLength: 30, defaultElectricalCharge: 100 })
+            { maxIterations, defaultSpringLength, defaultElectricalCharge })
       });
 
   // define each Node's appearance
@@ -52,55 +60,10 @@ function init() {
       )
     );
 
-  // create the model for the concept map
-  var nodeDataArray = [
-    { key: 1, text: "Concept Maps" },
-    { key: 2, text: "Organized Knowledge" },
-    { key: 3, text: "Context Dependent" },
-    { key: 4, text: "Concepts" },
-    { key: 5, text: "Propositions" },
-    { key: 6, text: "Associated Feelings or Affect" },
-    { key: 7, text: "Perceived Regularities" },
-    { key: 8, text: "Labeled" },
-    { key: 9, text: "Hierarchically Structured" },
-    { key: 10, text: "Effective Teaching" },
-    { key: 11, text: "Crosslinks" },
-    { key: 12, text: "Effective Learning" },
-    { key: 13, text: "Events (Happenings)" },
-    { key: 14, text: "Objects (Things)" },
-    { key: 15, text: "Symbols" },
-    { key: 16, text: "Words" },
-    { key: 17, text: "Creativity" },
-    { key: 18, text: "Interrelationships" },
-    { key: 19, text: "Infants" },
-    { key: 20, text: "Different Map Segments" }
-  ];
-  var linkDataArray = [
-    { from: 1, to: 2, text: "represent" },
-    { from: 2, to: 3, text: "is" },
-    { from: 2, to: 4, text: "is" },
-    { from: 2, to: 5, text: "is" },
-    { from: 2, to: 6, text: "includes" },
-    { from: 2, to: 10, text: "necessary\nfor" },
-    { from: 2, to: 12, text: "necessary\nfor" },
-    { from: 4, to: 5, text: "combine\nto form" },
-    { from: 4, to: 6, text: "include" },
-    { from: 4, to: 7, text: "are" },
-    { from: 4, to: 8, text: "are" },
-    { from: 4, to: 9, text: "are" },
-    { from: 5, to: 9, text: "are" },
-    { from: 5, to: 11, text: "may be" },
-    { from: 7, to: 13, text: "in" },
-    { from: 7, to: 14, text: "in" },
-    { from: 7, to: 19, text: "begin\nwith" },
-    { from: 8, to: 15, text: "with" },
-    { from: 8, to: 16, text: "with" },
-    { from: 9, to: 17, text: "aids" },
-    { from: 11, to: 18, text: "show" },
-    { from: 12, to: 19, text: "begins\nwith" },
-    { from: 17, to: 18, text: "needed\nto see" },
-    { from: 18, to: 20, text: "between" }
-  ];
+  generateData()
+  console.log(data)
+  let nodeDataArray = data.nodes
+  let linkDataArray = data.links
   myDiagram.model = new go.GraphLinksModel(nodeDataArray, linkDataArray);
 }
 
