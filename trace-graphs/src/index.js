@@ -2,12 +2,20 @@ import go from 'gojs'
 
 // import generateData from './generation/add'
 // import generateData from './examples/dijkstra'
-import generateData from './examples/parsingLR'
+// import generateData from './examples/parsingLR'
 import { network } from './examples/rule'
 
-const maxIterations = 1000
-const defaultElectricalCharge = 100
-const defaultSpringLength = 20
+// parsingLR
+// import generateData from './examples/parsingLR'
+// const maxIterations = 2000
+// const defaultElectricalCharge = 500
+// const defaultSpringLength = 40
+
+// dijkstra
+import generateData from './examples/dijkstra'
+const maxIterations = 2000
+const defaultElectricalCharge = 200
+const defaultSpringLength = 50
 
 function init() {
 
@@ -47,7 +55,7 @@ function init() {
       $(go.Panel, "Auto",
         $(go.Shape,  // the label background, which becomes transparent around the edges
           {
-            fill: $(go.Brush, "Radial", { 0: "rgb(240, 240, 240)", 0.3: "rgb(240, 240, 240)", 1: "rgba(240, 240, 240, 0)" }),
+            fill: $(go.Brush, "Radial", { 0: "rgb(167, 255, 254)", 0.3: "rgb(167, 255, 254)", 1: "rgba(167, 255, 254, 0.8)" }),
             stroke: null
           }),
         $(go.TextBlock,  // the label text
@@ -61,17 +69,25 @@ function init() {
       )
     );
 
+  /* ===========================================================================
+    generate network data
+  =========================================================================== */
+
   generateData()
   console.log("network", network)
   let nodeDataArray = network.nodes
   let linkDataArray = network.links
   myDiagram.model = new go.GraphLinksModel(nodeDataArray, linkDataArray);
 
+  /* ===========================================================================
+    button that makes snapshot image of canvas
+  =========================================================================== */
+
   const button = document.createElement('button')
   button.onclick = (event) => {
     const canvas = document.getElementsByTagName('canvas')[0]
     const img_src = canvas.toDataURL('image/png')
-    
+
     const img = document.createElement('img')
     img.src = img_src
     document.body.appendChild(img)

@@ -8,15 +8,9 @@ body {
   padding: 1rem;
 }
 
-html, body {
-  margin: 0;
-  padding: 1rem;
-  /* overflow: hidden; */
-}
-
 #content {
-  width: 1200px;
-  height: 700px;
+  /* width: 1200px; */
+  /* height: 700px; */
   border: 1px solid black;
 }
 

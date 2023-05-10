@@ -15,6 +15,8 @@ export type Rule = {
   con: String
 }
 
+let prev_node_key: Key | undefined = undefined
+
 export function renderRule(rule: Rule): String {
   let l = 0
   if (rule.label !== undefined) {
@@ -52,25 +54,59 @@ function makeNode(text: String): Key {
   return key
 }
 
+type LinkMode = 'silent' | 'traced'
 var linkIndex = 0
-function makeLink(from: Key, to: Key, text: String) {
+export function makeLink(from: Key | undefined, text: String, to: Key, mode: LinkMode) {
+  if (from === undefined) return
   // console.log(`[makeLink] from = ${from}; to = ${to}; text = ${text}`)
-  network.links.push({ from, to, text: `[${linkIndex}] ${text}` })
-  linkIndex++
+  // network.links.push({ from, to, text: `[${linkIndex}] ${text}` })
+
+  // network.links.push({ from, to, text })
+
+  // // links that traces algorithm
+  // if (prev_node_key !== undefined) {
+  //   network.links.push({ from: prev_node_key, to, text: `[${linkIndex}]` })
+  // }
+
+  switch (mode) {
+    case 'silent': {
+      network.links.push({ from, to, text: `${text}` })
+      break
+    }
+    case 'traced': {
+      network.links.push({ from, to, text: `[${linkIndex}] ${text}` })
+      if ((prev_node_key !== undefined && prev_node_key == from) || (prev_node_key == undefined)) {
+        // combine input links and trace links (same endpoints), so don't need
+        // another link for trace
+      } else if (prev_node_key !== undefined) {
+        // need separate link for trace
+        network.links.push({ from: prev_node_key, to, text: `[${linkIndex}]` })
+      }
+
+      prev_node_key = to
+      linkIndex++
+    }
+  }
 }
 
 export function makeAxiom(rule: Rule): Key {
   return makeNode(renderRule(rule))
 }
 
+export function makeStep(fromKey: Key, text: String, rule: Rule, mode: LinkMode): Key {
+  let toKey = makeNode(renderRule(rule))
+  makeLink(fromKey, text, toKey, mode)
+  return toKey
+}
+
 export function makeInstance(rule: Rule, generalKey: Key, wantKeys: Key[]): Key {
   let key = makeNode(renderRule(rule))
 
-  makeLink(generalKey, key, "inst")
+  makeLink(generalKey, "insts", key, 'silent')
 
   // var i = 0
   // wantKeys.forEach(wantKey => makeLink(key, wantKey, `wants #${i++}`))
-  wantKeys.forEach(wantKey => makeLink(key, wantKey, `wants`))
+  wantKeys.forEach(wantKey => makeLink(key, `wants`, wantKey, 'traced'))
 
   return key
 }
@@ -80,7 +116,7 @@ export function makeApplication(rule: Rule, wantKeys: Key[]): Key {
 
   // var i = 0
   // wantKeys.forEach(wantKey => makeLink(key, wantKey, `wants #${i++}`))
-  wantKeys.forEach(wantKey => makeLink(key, wantKey, `wants`))
+  wantKeys.forEach(wantKey => makeLink(key, `wants`, wantKey, 'traced'))
 
   return key
 }
