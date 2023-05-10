@@ -152,7 +152,7 @@ function traceShortestPathsFrom(startVertex: VertexId) {
   Visiting a vertex
   =========================================================================== */
 
-  function visitVertex(vertex: VertexId) {
+  function visitVertex(wanter: Key, vertex: VertexId) {
     // Add all edges that start at `target`, which themselves have an unvisited
     // target, to `nextEdges`.
     outEdges.get(vertex).forEach(nextEdge => {
@@ -169,13 +169,13 @@ function traceShortestPathsFrom(startVertex: VertexId) {
       nextEdge = nextEdges.shift()
       if (!visitedVertices.includes(edges.get(nextEdge).target)) {
         // Visit `nextEdge` since it's target hasn't been visited
-        visit(nextEdge)
+        visit(wanter, nextEdge)
         return
       }
     }
   }
 
-  function visit(edge: EdgeId) {
+  function visit(wanter: Key, edge: EdgeId) {
     const { source, target, weight: edgeWeight } = edges.get(edge)
     const deriv = shortestDerivs.get(source)
     const derivWeight = derivWeights.get(deriv)
@@ -194,14 +194,18 @@ function traceShortestPathsFrom(startVertex: VertexId) {
     shortestDerivs.set(target, step_inst)
     derivWeights.set(step_inst, derivWeight + edgeWeight)
 
+    makeLink(wanter, "wants", step_inst, 'traced')
     makeLink(step_inst, "wants", deriv, 'traced')
     makeLink(step_inst, "wants", edge, 'traced')
 
     // instantiate 
-    visitVertex(target)
+    visitVertex(wanter, target)
   }
 
-  visitVertex(0)
+  visitVertex(makeAxiom({
+    vars: ["∀n1", "∀n2", "∀n3"],
+    con: "n1 -->> n2 <= w"
+  }), 0)
 }
 
 export default function generateData() {

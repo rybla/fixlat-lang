@@ -47,7 +47,7 @@ function traceParse_S_v1(str: String) {
     Parsers
   =========================================================================== */
 
-  function parse_char(c: String, wanter: Key | undefined, ix: number): ParseResult | undefined {
+  function parse_char(c: String, wanter: Key, ix: number): ParseResult | undefined {
     if (str.charAt(ix) == c) {
       const key = charAxioms.at(ix)
       makeLink(wanter, "wants", key, 'traced')
@@ -56,7 +56,7 @@ function traceParse_S_v1(str: String) {
     return undefined
   }
 
-  function parse_S_rule1(wanter: Key | undefined, ix: number): ParseResult | undefined {
+  function parse_S_rule1(wanter: Key, ix: number): ParseResult | undefined {
     const rule1_inst1 = makeStep(rule1, "insts", {
       label: `rule1 [i:=${ix}]`,
       vars: [`∀j`, `∀k`, `∀l`],
@@ -78,7 +78,7 @@ function traceParse_S_v1(str: String) {
     return { key: rule1_inst1, ix: rpar.ix }
   }
 
-  function parse_S_rule2(wanter: Key | undefined, ix: number): ParseResult | undefined {
+  function parse_S_rule2(wanter: Key, ix: number): ParseResult | undefined {
     const rule2_inst = makeStep(rule2, "insts", {
       label: `rule2 [i:=${ix}]`,
       vars: [`∀j`, `∀k`],
@@ -100,7 +100,7 @@ function traceParse_S_v1(str: String) {
     return { key: rule2_inst, ix: s2.ix }
   }
 
-  function parse_S_rule3(wanter: Key | undefined, ix: number): ParseResult | undefined {
+  function parse_S_rule3(wanter: Key, ix: number): ParseResult | undefined {
     const rule3_inst = makeStep(rule3, "insts", {
       label: `rule3 [i:=${ix}]`,
       vars: [`∀j`],
@@ -140,7 +140,7 @@ function traceParse_S_v1(str: String) {
     return s
   }
 
-  function parse_S_non2(wanter: Key | undefined, ix: number): ParseResult | undefined {
+  function parse_S_non2(wanter: Key, ix: number): ParseResult | undefined {
     const s_rule1 = parse_S_rule1(wanter, ix)
     if (s_rule1 !== undefined) return remember_S_rule1(ix, s_rule1)
 
@@ -149,14 +149,17 @@ function traceParse_S_v1(str: String) {
   }
 
 
-  function parse_S(wanter: Key | undefined, ix: number): ParseResult | undefined {
+  function parse_S(wanter: Key, ix: number): ParseResult | undefined {
     const s_rule2 = parse_S_rule2(wanter, ix)
     if (s_rule2 !== undefined) return remember_S_rule2(ix, s_rule2)
 
     return parse_S_non2(wanter, ix)
   }
 
-  parse_S(undefined, 0)
+  parse_S(makeAxiom({
+    vars: ["∀i", "∀j"],
+    con: "i S j"
+  }), 0)
 }
 
 // unambiguous grammar
@@ -209,7 +212,7 @@ function traceParse_S_v2(str: String) {
     Parsers
   =========================================================================== */
 
-  function parse_char(c: String, wanter: Key | undefined, ix: number): ParseResult | undefined {
+  function parse_char(c: String, wanter: Key, ix: number): ParseResult | undefined {
     if (str.charAt(ix) == c) {
       const key = charAxioms.at(ix)
       makeLink(wanter, "wants", key, 'traced')
@@ -218,7 +221,7 @@ function traceParse_S_v2(str: String) {
     return undefined
   }
 
-  function parse_Sp_rule1(wanter: Key | undefined, ix: number): ParseResult | undefined {
+  function parse_Sp_rule1(wanter: Key, ix: number): ParseResult | undefined {
     const rule1_inst1 = makeStep(rule1, "insts", {
       label: `rule1 [i:=${ix}]`,
       vars: [`∀j`, `∀k`, `∀l`],
@@ -244,7 +247,7 @@ function traceParse_S_v2(str: String) {
     return { key: rule1_inst1, ix: rpar.ix }
   }
 
-  function parse_Sp_rule2(wanter: Key | undefined, ix: number): ParseResult | undefined {
+  function parse_Sp_rule2(wanter: Key, ix: number): ParseResult | undefined {
     const rule2_inst = makeStep(rule2, "insts", {
       label: `rule2 [i:=${ix}]`,
       vars: [`∀i`, `∀j`, `∀k`, `∀l`],
@@ -270,7 +273,7 @@ function traceParse_S_v2(str: String) {
     return { key: rule2_inst, ix: s2.ix }
   }
 
-  function parse_Sp_rule3(wanter: Key | undefined, ix: number): ParseResult | undefined {
+  function parse_Sp_rule3(wanter: Key, ix: number): ParseResult | undefined {
     const rule3_inst = makeStep(rule3, "insts", {
       label: `rule3 [i:=${ix}]`,
       vars: [`∀j`],
@@ -286,7 +289,7 @@ function traceParse_S_v2(str: String) {
     return { key: rule3_inst, ix: a.ix }
   }
 
-  function parse_Sp(wanter: Key | undefined, ix: number): ParseResult | undefined {
+  function parse_Sp(wanter: Key, ix: number): ParseResult | undefined {
     const sp_rule1 = parse_Sp_rule1(wanter, ix)
     if (sp_rule1 !== undefined) return sp_rule1
 
@@ -297,18 +300,22 @@ function traceParse_S_v2(str: String) {
     if (sp_rule3 !== undefined) return sp_rule3
   }
 
-  parse_Sp(undefined, 0)
+  parse_Sp(makeAxiom({
+    vars: ["∀i", "∀j"],
+    con: "i S j"
+  }), 0)
 }
 
 
 export default function generateData() {
-  // S
-  // traceParse_S_v1(`()`)
-  traceParse_S_v1(`aaa`)
-  // traceParse_S_v1(`(())(()())`)
-  // traceParse_S_v1(`(a)`)
-  // traceParse_S_v1(`(a)(a)`)
+  // // S
+  // // traceParse_S_v1(`()`)
+  // traceParse_S_v1(`aaa`)
+  // // traceParse_S_v1(`(())(()())`)
+  // // traceParse_S_v1(`(a)`)
+  // // traceParse_S_v1(`(a)(a)`)
 
   // Sp
+  traceParse_S_v2(`#aa`)
   // traceParse_S_v2(`#(a)(a)`)
 }

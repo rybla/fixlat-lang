@@ -1,21 +1,24 @@
 import go from 'gojs'
 
-// import generateData from './generation/add'
-// import generateData from './examples/dijkstra'
-// import generateData from './examples/parsingLR'
 import { network } from './examples/rule'
 
-// parsingLR
+// add
+import generateData from './examples/add'
+const maxIterations = 2000
+const defaultElectricalCharge = 500
+const defaultSpringLength = 20
+
+// // dijkstra
+// import generateData from './examples/dijkstra'
+// const maxIterations = 2000
+// const defaultElectricalCharge = 200
+// const defaultSpringLength = 50
+
+// // parsingLR
 // import generateData from './examples/parsingLR'
 // const maxIterations = 2000
 // const defaultElectricalCharge = 500
 // const defaultSpringLength = 40
-
-// dijkstra
-import generateData from './examples/dijkstra'
-const maxIterations = 2000
-const defaultElectricalCharge = 200
-const defaultSpringLength = 50
 
 function init() {
 
