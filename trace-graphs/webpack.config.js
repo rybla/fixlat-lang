@@ -15,8 +15,16 @@ module.exports = {
     rules: [
       {
         test: "\/.json$i",
-        use: 'asset/resource'
+        exclude: /node_modules/,
+      },
+      {
+        test: /\.ts$/,
+        use: 'ts-loader',
+        exclude: /node_modules/,
       }
     ]
+  },
+  resolve: {
+    extensions: ['.ts', '.js'],
   }
 };

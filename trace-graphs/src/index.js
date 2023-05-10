@@ -1,12 +1,13 @@
 import go from 'gojs'
 
 // import generateData from './generation/add'
-import generateData from './generation/dijkstra'
-import { data } from './generation/rule'
+// import generateData from './examples/dijkstra'
+import generateData from './examples/parsingLR'
+import { network } from './examples/rule'
 
-const maxIterations = 500
+const maxIterations = 1000
 const defaultElectricalCharge = 100
-const defaultSpringLength = 10
+const defaultSpringLength = 20
 
 function init() {
 
@@ -32,7 +33,7 @@ function init() {
       $(go.Shape, "Rectangle",
         { fill: $(go.Brush, "Linear", { 0: "rgb(254, 201, 0)", 1: "rgb(254, 162, 0)" }), stroke: "black" }),
       $(go.TextBlock,
-        { font: "bold 10pt helvetica, bold arial, sans-serif", margin: 4 },
+        { font: "bold 10pt serif, bold arial, sans-serif", margin: 4 },
         new go.Binding("text", "text"))
     );
 
@@ -61,10 +62,22 @@ function init() {
     );
 
   generateData()
-  console.log(data)
-  let nodeDataArray = data.nodes
-  let linkDataArray = data.links
+  console.log("network", network)
+  let nodeDataArray = network.nodes
+  let linkDataArray = network.links
   myDiagram.model = new go.GraphLinksModel(nodeDataArray, linkDataArray);
+
+  const button = document.createElement('button')
+  button.onclick = (event) => {
+    const canvas = document.getElementsByTagName('canvas')[0]
+    const img_src = canvas.toDataURL('image/png')
+    
+    const img = document.createElement('img')
+    img.src = img_src
+    document.body.appendChild(img)
+  }
+  button.innerHTML = "create image"
+  document.body.appendChild(button)
 }
 
 window.addEventListener('DOMContentLoaded', init);
