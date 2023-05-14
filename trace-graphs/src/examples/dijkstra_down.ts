@@ -1,4 +1,4 @@
-import { Key, makeAxiom, makeLink, makeStep } from "./rule"
+import { Key, makeAxiom, makeLink, makeStep } from "./rule_down"
 
 type VertexId = number
 type EdgeId = Key
@@ -203,8 +203,8 @@ function traceShortestPathsFrom(startVertex: VertexId) {
   }
 
   visitVertex(makeAxiom({
-    vars: ["∀n1", "∀n2", "∀n3"],
-    con: "n1 -->> n2 <= w"
+    vars: ["∀n2", "∀n3"],
+    con: "0 -->> n2 <= w"
   }), 0)
 }
 

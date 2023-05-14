@@ -1,4 +1,4 @@
-import { Key, makeApplication, makeAxiom, makeInstance, makeLink, makeStep } from './rule'
+import { Key, makeApplication, makeAxiom, makeInstance, makeLink, makeStep } from './rule_down'
 
 type ParseResult = { key: Key, ix: number }
 
@@ -308,14 +308,14 @@ function traceParse_S_v2(str: String) {
 
 
 export default function generateData() {
-  // // S
-  // // traceParse_S_v1(`()`)
+  // S
+  traceParse_S_v1(`()`)
   // traceParse_S_v1(`aaa`)
-  // // traceParse_S_v1(`(())(()())`)
-  // // traceParse_S_v1(`(a)`)
-  // // traceParse_S_v1(`(a)(a)`)
+  // traceParse_S_v1(`(())(()())`)
+  // traceParse_S_v1(`(a)`)
+  // traceParse_S_v1(`(a)(a)`)
 
-  // Sp
-  traceParse_S_v2(`#aa`)
-  // traceParse_S_v2(`#(a)(a)`)
+  // // Sp
+  // traceParse_S_v2(`#aa`)
+  // // traceParse_S_v2(`#(a)(a)`)
 }

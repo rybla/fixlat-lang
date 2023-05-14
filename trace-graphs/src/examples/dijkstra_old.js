@@ -1,4 +1,4 @@
-import { nodes, links, makeAxiom, makeApplication, makeInstance } from "./rule"
+import { nodes, links, makeAxiom, makeApplication, makeInstance } from "./rule_down"
 
 const vertices = []
 const edges = new Map() // edge => {source, target, weight}

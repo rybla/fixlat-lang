@@ -1,24 +1,31 @@
 import go from 'gojs'
 
-import { network } from './examples/rule'
+// import { network } from './examples/rule_down'
+import { network } from './examples/rule_up'
 
-// add
-import generateData from './examples/add'
-const maxIterations = 2000
-const defaultElectricalCharge = 500
-const defaultSpringLength = 20
+// // add
+// import generateData from './examples/add'
+// const maxIterations = 2000
+// const defaultElectricalCharge = 500
+// const defaultSpringLength = 20
 
-// // dijkstra
-// import generateData from './examples/dijkstra'
+// // dijkstra_down
+// import generateData from './examples/dijkstra_down'
 // const maxIterations = 2000
 // const defaultElectricalCharge = 200
 // const defaultSpringLength = 50
 
+// dijkstra_up
+import generateData from './examples/dijkstra_up'
+const maxIterations = 2000
+const defaultElectricalCharge = 200
+const defaultSpringLength = 50
+
 // // parsingLR
 // import generateData from './examples/parsingLR'
-// const maxIterations = 2000
-// const defaultElectricalCharge = 500
-// const defaultSpringLength = 40
+// const maxIterations = 5000
+// const defaultElectricalCharge = 700
+// const defaultSpringLength = 50
 
 function init() {
 
@@ -31,9 +38,10 @@ function init() {
       {
         initialAutoScale: go.Diagram.Uniform,  // an initial automatic zoom-to-fit
         contentAlignment: go.Spot.Center,  // align document to the center of the viewport
-        layout:
-          $(go.ForceDirectedLayout,  // automatically spread nodes apart
-            { maxIterations, defaultSpringLength, defaultElectricalCharge })
+        // layout:
+        //   $(go.ForceDirectedLayout,  // automatically spread nodes apart
+        //     { maxIterations, defaultSpringLength, defaultElectricalCharge })
+        layout: $(go.TreeLayout, { nodeSpacing: 5 })
       });
 
   // define each Node's appearance

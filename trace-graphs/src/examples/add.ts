@@ -1,4 +1,4 @@
-import { makeAxiom, makeInstance, makeApplication, makeStep, Key, makeLink } from './rule'
+import { makeAxiom, makeInstance, makeApplication, makeStep, Key, makeLink } from './rule_down'
 
 const add_zero: Key = makeAxiom({
   label: "add zero",

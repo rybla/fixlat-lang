@@ -1,4 +1,4 @@
-import { nodes, links, makeAxiom, makeInstance, makeApplication } from './rule'
+import { nodes, links, makeAxiom, makeInstance, makeApplication } from './rule_down'
 
 // compute trace of add
 function trace(a0, b0) {
