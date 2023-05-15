@@ -63,3 +63,7 @@ export function makeLinks(froms: Key[], text: String, tos: Key[]) {
     })
   })
 }
+
+export function makeAxiom(rule: Rule): Key {
+  return makeNode(renderRule(rule))
+}
