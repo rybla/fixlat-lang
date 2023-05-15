@@ -88,7 +88,7 @@ function generateGraph(n: number) {
 
   const n_outEdges = 3 // for each vertex
   for (let v1 = 0; v1 < vertices.length; v1++) {
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < n_outEdges; i++) {
       let vertices_ = vertices.filter(v2 => {
         outEdges.get(v1).forEach(e => {
           const tgt = edges.get(e).v2
@@ -259,23 +259,23 @@ function traceShortestPathsFrom(v0: VertexId) {
 }
 
 export default function generateData() {
-  const n = 20
-  generateGraph(n)
+  // const n = 20
+  // generateGraph(n)
 
   // loadGraph({
   //   vertices: [0, 1, 2, 3,],
   //   edges: [{ v1: 0, v2: 2, w: 4 }, { v1: 0, v2: 0, w: 4 }, { v1: 0, v2: 0, w: 4 }, { v1: 1, v2: 0, w: 2 }, { v1: 1, v2: 0, w: 3 }, { v1: 1, v2: 0, w: 4 }, { v1: 2, v2: 2, w: 2 }, { v1: 2, v2: 3, w: 3 }, { v1: 2, v2: 0, w: 1 }, { v1: 3, v2: 2, w: 2 }, { v1: 3, v2: 0, w: 1 }, { v1: 3, v2: 3, w: 2 },]
   // })
 
-  // loadGraph(
-  //   [0, 1, 2, 3],
-  //   [
-  //     { v1: 0, v2: 1, w: 2 },
-  //     { v1: 1, v2: 3, w: 1 },
-  //     { v1: 0, v2: 2, w: 1 },
-  //     { v1: 2, v2: 3, w: 4 },
-  //   ]
-  // )
+  loadGraph(
+    [0, 1, 2, 3],
+    [
+      { v1: 0, v2: 1, w: 2 },
+      { v1: 1, v2: 3, w: 1 },
+      { v1: 0, v2: 2, w: 1 },
+      { v1: 2, v2: 3, w: 4 },
+    ]
+  )
 
   logGraphviz()
 

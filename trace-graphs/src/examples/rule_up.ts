@@ -32,7 +32,7 @@ export function renderRule(rule: Rule): String {
   for (let i = 0; i < l; i++) { hbar += "–" }
 
   let str = ""
-  if (rule.label !== undefined) { str += `[${rule.label}]` + "\n" }
+  if (rule.label !== undefined) { str += `[ ${rule.label} ]` + "\n" }
   if (rule.vars !== undefined && rule.vars.length > 0) { str += rule.vars.join(" ") + "\n" }
   if (rule.hyps !== undefined && rule.hyps.length > 0) { str += rule.hyps.join("\n") + "\n" }
   str += hbar + "\n"

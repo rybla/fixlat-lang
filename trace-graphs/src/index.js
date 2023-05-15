@@ -15,17 +15,17 @@ import { network } from './examples/rule_up'
 // const defaultElectricalCharge = 200
 // const defaultSpringLength = 50
 
-// dijkstra_up
-import generateData from './examples/dijkstra_up'
-const maxIterations = 2000
-const defaultElectricalCharge = 200
-const defaultSpringLength = 50
-
-// // parsingLR
-// import generateData from './examples/parsingLR'
-// const maxIterations = 5000
-// const defaultElectricalCharge = 700
+// // dijkstra_up
+// import generateData from './examples/dijkstra_up'
+// const maxIterations = 2000
+// const defaultElectricalCharge = 200
 // const defaultSpringLength = 50
+
+// parsingLR
+import generateData from './examples/parsingLR'
+const maxIterations = 5000
+const defaultElectricalCharge = 700
+const defaultSpringLength = 50
 
 function init() {
 
@@ -41,7 +41,12 @@ function init() {
         // layout:
         //   $(go.ForceDirectedLayout,  // automatically spread nodes apart
         //     { maxIterations, defaultSpringLength, defaultElectricalCharge })
-        layout: $(go.TreeLayout, { nodeSpacing: 5 })
+        layout: $(go.TreeLayout, { 
+          nodeSpacing: 200,
+          layerSpacing: 400,
+          // alignment: go.TreeLayout.AlignmentBusBranching
+          // alignment: go.TreeLayout.AlignmentTopLeftBus
+        })
       });
 
   // define each Node's appearance
