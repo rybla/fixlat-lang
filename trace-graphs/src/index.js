@@ -20,12 +20,18 @@ import { network } from './examples/rule_up'
 // const maxIterations = 2000
 // const defaultElectricalCharge = 200
 // const defaultSpringLength = 50
+// const nodeSpacing = 200
+// const layerSpacing = 400
 
-// parsingLR
-import generateData from './examples/parsingLR'
-const maxIterations = 5000
-const defaultElectricalCharge = 700
-const defaultSpringLength = 50
+// // parsingLR
+// import generateData from './examples/parsingLR'
+// const nodeSpacing = 200
+// const layerSpacing = 400
+
+// add_up
+import generateData from './examples/add_up'
+const nodeSpacing = 200
+const layerSpacing = 400
 
 function init() {
 
@@ -42,8 +48,8 @@ function init() {
         //   $(go.ForceDirectedLayout,  // automatically spread nodes apart
         //     { maxIterations, defaultSpringLength, defaultElectricalCharge })
         layout: $(go.TreeLayout, { 
-          nodeSpacing: 200,
-          layerSpacing: 400,
+          nodeSpacing: nodeSpacing,
+          layerSpacing: layerSpacing,
           // alignment: go.TreeLayout.AlignmentBusBranching
           // alignment: go.TreeLayout.AlignmentTopLeftBus
         })
