@@ -1,0 +1,17 @@
+# Purescript files
+/bower_components/
+/node_modules/
+/.pulp-cache/
+/output/
+/output-prod/
+/generated-docs/
+/.psc-package/
+/.psc*
+/.purs*
+/.psa*
+/.spago
+/dist/index.js
+
+# IDE files
+/.idea
+/.vscode
