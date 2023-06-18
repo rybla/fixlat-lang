@@ -6,12 +6,10 @@ import Prelude
 import Data.List (List)
 import Hole (hole)
 
-type MonotonicityObligation =
-  { scope :: List Quantifier
-  , inputs :: List (Term LatticeType)
-  , conclusionTerm :: Term LatticeType  
-  , conclusionLattice :: LatticeType
-  }
+data MonotonicityObligation
 
-checkMonotonicity :: Rule -> List MonotonicityObligation
-checkMonotonicity = hole "checkMonotonicity"
+-- | Generates the MonotonicityObligations that are sufficient to show that,
+-- | each Relation's derivations, using only the given Rules, are monotonic in
+-- | the lattice of its argument.
+obligateMonotonicity :: Array Relation -> Array Rule -> List MonotonicityObligation
+obligateMonotonicity = hole "obligateMonotonicity"

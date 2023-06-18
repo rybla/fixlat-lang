@@ -1,122 +1,168 @@
 module Language.Fixlat.Core.Grammar where
 
+import Data.Tuple.Nested
+import Data.Variant
+import Prelude
 import Prim hiding (Type)
+
+import Data.Generic.Rep (class Generic)
+import Data.List (List)
+import Data.Map as Map
+import Data.Maybe (Maybe)
+import Data.Show.Generic (genericShow)
+import Hole (hole)
 import Prim as Prim
 
 --------------------------------------------------------------------------------
--- Modules
+-- Module
 --------------------------------------------------------------------------------
 
-data Module (ty :: Prim.Type) = Module ModuleName (Array (Declaration ty))
+data Module ty = Module (Array (Declaration ty))
 
-data Declaration (ty :: Prim.Type)
-  = DataTypeDeclaration TypeName DataType
-  | LatticeTypeDeclaration TypeName LatticeType
-  | FunctionDeclaration FunctionName FunctionType
-  | RelationDeclaration RelationName Relation
-  | RuleDeclaration Rule
-  | DatabaseDeclaration DatabaseName Database
+type Declaration (ty :: Prim.Type) = Variant
+  ( dataType :: TypeName /\ DataType
+  , latticeType :: TypeName /\ LatticeType
+  , functionSpecs :: FunctionName /\ FunctionSpec
+  , relation :: RelationName /\ Relation
+  , rule :: RuleName /\ Rule
+  , indexSpec :: IndexSpecName /\ IndexSpec )
 
 --------------------------------------------------------------------------------
--- Types
+-- Type
 --------------------------------------------------------------------------------
 
--- | A data type encodes the structure of the terms of a type, but not a lattice
+-- | A DataType encodes the structure of the Terms of a type, but not a lattice
 -- | ordering over them.
 data DataType
   = NamedDataType TypeName
 
--- | A lattice type specifies a lattice ordering over a uniquely determined
--- | underlying data type.
+-- | A LatticeType specifies a lattice ordering over a uniquely deTermined
+-- | underlying DataType.
 data LatticeType
   = NamedLatticeType TypeName
 
--- A term, annotated with type information.
-data Term ty
-  = NeutralTerm TermName (Term ty) ty
-  | NamedTerm TermName ty
+derive instance Generic LatticeType _
+instance Show LatticeType where show x = genericShow x
 
 --------------------------------------------------------------------------------
--- Functions
+-- Term
 --------------------------------------------------------------------------------
 
--- | A function type, which can either be a data function (lattice-polymorphic)
--- | or a lattice function (lattice-specific).
-data FunctionType
-  = DataFunctionType (Array DataType) DataType
-  | LatticeFunctionType (Array LatticeType) LatticeType
+-- A Term, annotated with type information.
+type Term = Term_ TermName
+data Term_ x ty
+  = NeutralTerm FunctionName (Term_ x ty) ty
+  | NamedTerm x ty
+
+derive instance Generic (Term_ x ty) _
+instance (Show x, Show ty) => Show (Term_ x ty) where show x = genericShow x
+
+trueTerm :: Term LatticeType
+trueTerm = hole "trueTerm"
+
+falseTerm :: Term LatticeType
+falseTerm = hole "falseTerm"
+
+substituteTerm :: forall ty. Map.Map TermName (Term ty) -> Term ty -> Term ty
+substituteTerm _sigma = hole "substituteTerm"
 
 --------------------------------------------------------------------------------
--- Relations
+-- Function
 --------------------------------------------------------------------------------
 
--- | A relation over terms of a type.
--- | 
--- | A relation allows lattice-polymorphism in the argument type.
--- |
--- | A relation must be be covariant in the argument's lattice. Rules that
--- | propositions of this relation yield obligations to ensure this.
-data Relation 
-  = DataRelation DataType
-  | LatticeRelation LatticeType
+-- TODO: any other metadata that a function needs?
+data FunctionSpec = FunctionSpec FunctionType
 
--- | A proposition of a particular instance of a relation.
-data Proposition ty = Proposition (Term ty)
+-- | A FunctionType, which can either be a data function (lattice-polymorphic)
+-- | or a lattice function (lattice-specific). Each use of a Function must be
+-- | monotonic.
+data FunctionType = FunctionType (Array DataType) DataType
 
 --------------------------------------------------------------------------------
--- Rules
+-- Relation
 --------------------------------------------------------------------------------
 
--- | An derivation rule for deriving propositions of a relation. A rule has:
+-- | A Relation over Terms of a LatticeType. A Relation must be be covariant in
+-- | the argument's lattice.
+data Relation = Relation LatticeType
+
+-- | A proposition of a particular instance of a Relation.
+type Proposition = Proposition_ TermName
+data Proposition_ x ty = Proposition (Term_ x ty)
+
+substituteProposition :: forall ty. Map.Map TermName (Term ty) -> Proposition ty -> Proposition ty
+substituteProposition _sigma = hole "substituteProposition"
+
+--------------------------------------------------------------------------------
+-- Rule
+--------------------------------------------------------------------------------
+
+-- | An derivation Rule for deriving propositions of a Relation. A Rule has:
 -- | - lattice-typed quantifiers, universal or existential, which are introduced
--- |   into scope for the nested rule
+-- |   into scope for the nested Rule
 -- | - hypothesis propositions
--- | - filters, which are boolean terms that can be use quantified variables in
+-- | - filters, which are boolean Terms that can be use quantified variables in
 -- |   scope
 -- | - a single conclusion proposition
-data Rule 
-  = QuantifierRule  Rule
-  | HypothesisRule (Proposition LatticeType) Rule
-  | FilterRule (Term LatticeType) Rule
-  | ConclusionRule (Proposition LatticeType)
+data Rule = Rule (List RuleHypothesis) (Proposition LatticeType)
 
-data Quantification = Quantification Quantifier TermName LatticeType
+-- TODO: actually `Array Quantification` isn't optimal, since we know that the
+-- order of consecutive existential quantifiers or consecutive universal
+-- quantifiers doesn't matter.
+data RuleHypothesis = RuleHypothesis
+  (Array Quantification) -- quantifications before hypothesis proposition
+  (Proposition LatticeType) -- hypothesis proposition
+  (Maybe (Term LatticeType)) -- filter term (boolean-valued)
+
+data Quantification = Quantification
+  Quantifier
+  TermName
+  LatticeType
 
 data Quantifier = Forall | Exists
 
 --------------------------------------------------------------------------------
--- Databases
+-- Index
 --------------------------------------------------------------------------------
 
-data Database = Database (Array Fixpoint) (Array Query) (Array Insertion)
+data IndexSpec = IndexSpec (Array IndexSpecDeclaration)
 
--- | A Database fixpoint specifies a derived function that generates a
--- | fixpoint, which can later be queried from and inserted into.
-data Fixpoint
+type IndexSpecDeclaration = Variant
+  ( fixpoint :: FixpointSpecName /\ FixpointSpec
+  , query :: QuerySpecName /\ QuerySpec
+  , insertion :: InsertionSpecName /\ InsertionSpec )
 
--- | A Database insertion specifies a derived function that inserts terms into
--- | the Database.
-data Insertion
+-- | An IndexSpec FixpointSpec specifies a derived function that populates the
+-- | IndexSpec with the FixpointSpec of the IndexSpec's Terms and the given
+-- | Rules.
+data FixpointSpec = FixpointSpec (Array RuleName)
 
--- | A Database query specifies a derived function that queries terms of a
--- | particular form from the Database, once it has been populated by fixpoints
--- | and insertions.
-data Query
+-- | An IndexSpec InsertionSpec specifies a derived function that inserts Terms
+-- | into the IndexSpec.
+data InsertionSpec = InsertionSpec RelationName
+
+-- | An IndexSpec QuerySpec specifies a derived function that queries Terms of a
+-- | particular form from the IndexSpec. The QuerySpec is encoded as a Rule,
+-- | which corresponds to QuerySpec that assumes the Rule's premises and looks
+-- | for a the lattice-maximal derivation of the conclusion.
+data QuerySpec = QuerySpec Rule
 
 --------------------------------------------------------------------------------
--- Names
+-- Name
 --------------------------------------------------------------------------------
 
-newtype TypeName = TypeName String
+newtype Name (label :: Symbol) = Name String
+derive newtype instance Show (Name label)
+derive newtype instance Eq (Name label)
+derive newtype instance Ord (Name label)
 
-newtype TermName = TermName String
-
-newtype FunctionName = FunctionName String
-
-newtype RelationName = RelationName String
-
-newtype RuleName = RuleName String
-
-newtype DatabaseName = DatabaseName String
-
-newtype ModuleName = ModuleName String
+type TypeName = Name "type"
+type TermName = Name "Term"
+type FunctionName = Name "function"
+type RelationName = Name "Relation"
+type RuleName = Name "Rule"
+type IndexSpecName = Name "index"
+type ModuleName = Name "module"
+type FixpointSpecName = Name "fixpoint"
+type QuerySpecName = Name "query"
+type InsertionSpecName = Name "insertion"

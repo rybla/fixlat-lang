@@ -1,0 +1,173 @@
+module Language.Fixlat.Core.InternalFixpoint where
+
+import Prelude
+import Data.Either.Nested
+import Data.Tuple.Nested
+import Control.Monad.State (StateT, gets, lift, modify, modify_)
+import Data.Array as Array
+import Data.Bifunctor (bimap)
+import Data.Either (Either(..))
+import Data.Foldable (for_, traverse_)
+import Data.List (List)
+import Data.List as List
+import Data.Map as Map
+import Data.Maybe (Maybe(..))
+import Data.Traversable (for, traverse)
+import Effect (Effect)
+import Effect.Class (class MonadEffect)
+import Hole (hole)
+import Language.Fixlat.Core.Grammar as G
+import Language.Fixlat.Core.ModuleT (ModuleT)
+import Language.Fixlat.Core.Unification (runUnifyT, unifyProposition)
+import Record as R
+import Type.Proxy (Proxy(..))
+
+-- | Internal fixpoint implementation.
+fixpoint :: forall m. Monad m => G.IndexSpecName -> G.FixpointSpecName -> ModuleT m Index
+fixpoint indexSpecname fixpointSpecname = hole "fixpoint"
+-- TODO: initialize everything from input in queue?
+
+--------------------------------------------------------------------------------
+-- FixpointT
+--------------------------------------------------------------------------------
+
+type FixpointT m = StateT Env (ModuleT m)
+
+liftFixpointT :: forall m a. Monad m => ModuleT m a -> FixpointT m a
+liftFixpointT = lift
+
+type Env =
+  { index :: Index
+  , queue :: Queue
+  , comparePatch :: Patch -> Patch -> Ordering
+  }
+
+_index = Proxy :: Proxy "index"
+_queue = Proxy :: Proxy "queue"
+_comparePatch = Proxy :: Proxy "comparePatch"
+
+type Patch = Patch_ G.TermName
+data Patch_ x 
+  = ApplyPatch
+    (Array G.Quantification) -- quantifications before hypothesis proposition
+    (G.Proposition_ x G.LatticeType) -- hypothesis proposition
+    (Maybe (G.Term_ x G.LatticeType)) -- filter term (boolean-valued)
+    Patch -- conclusion patch
+  | PropositionPatch (G.Proposition_ x G.LatticeType)
+
+substitutePatch :: Map.Map G.TermName (G.Term G.LatticeType) -> Patch -> Patch
+substitutePatch = hole "substitutePatch"
+
+--------------------------------------------------------------------------------
+-- loop
+--------------------------------------------------------------------------------
+
+loop :: forall m. Monad m => FixpointT m Unit
+loop = do
+  -- pop next patch from queue
+  pop >>= case _ of
+    Nothing -> 
+      -- no more patches; done
+      pure unit
+    Just patch -> do
+      -- learn patch, yielding new patches
+      learn patch >>= case _ of
+        [] -> do
+          -- finished learning; done
+          pure unit
+        patches -> do
+          -- insert new patches into queue
+          traverse_ insert patches
+          -- loop
+          loop
+
+--------------------------------------------------------------------------------
+-- Queue
+--------------------------------------------------------------------------------
+
+data Queue = Queue (List Patch)
+
+-- Remove next items from queue until get one that is not subsumed by current
+-- knowledge.
+pop :: forall m. Monad m => FixpointT m (Maybe Patch)
+pop = do
+  Queue queue <- gets _.queue
+  case List.uncons queue of
+    Nothing -> pure Nothing
+    Just {head: patch, tail: queue'} -> do
+      modify_ _{queue = Queue queue'}
+      isSubsumed patch >>=
+        if _ then
+          -- patch is subsumed; pop next
+          pop
+        else 
+          -- patch is not subsumed; so is new
+          pure (Just patch)
+
+insert :: forall m. Monad m => Patch -> FixpointT m Unit
+insert patch = do
+  Queue queue <- gets _.queue
+  comparePatch <- gets _.comparePatch
+  modify_ _{queue = Queue (List.insertBy comparePatch patch queue)}
+
+--------------------------------------------------------------------------------
+-- Index
+--------------------------------------------------------------------------------
+
+-- | An index stores all current rules, which includes 
+data Index = Index (Array (G.Proposition G.LatticeType))
+
+-- | Insert a proposition into an index, respective subsumption (i.e. removes
+-- | propositions in the index that are subsumed by the new proposition, and
+-- | ignores the new proposition if it is already subsumed by propositions in
+-- | the index). If `prop` is subsumed by `index`, then `insertIntoIndex prop index
+-- | = Nothing`
+insertIntoIndex :: forall m. Monad m => G.Proposition G.LatticeType -> FixpointT m Boolean
+insertIntoIndex prop = hole "insertIntoIndex"
+
+getCandidates :: forall m. Monad m => FixpointT m (Array (G.Proposition G.LatticeType))
+getCandidates = hole "getCandidates"
+
+-- Learns `patch` by inserting into `index` anything new derived from the patch,
+-- and yields any new `patches` that are derived from the patch.
+learn :: forall m. Monad m => Patch -> FixpointT m (Array Patch)
+learn (PropositionPatch prop) = do
+  void $ insertIntoIndex prop
+  pure []
+learn (ApplyPatch quantifiers expectation mb_condition conclusion) = do
+  -- For each candidate proposition in the index
+  candidates <- getCandidates
+  Array.concat <$> for candidates \candidate -> do
+    let ctx = {quantifiers}
+    liftFixpointT (runUnifyT ctx (unifyProposition expectation candidate)) >>= case _ of
+      Left _err -> do
+        -- not unifiable, so ignore candidate
+        pure []
+      Right (_ /\ sigma) -> do
+        -- apply sigma to condition
+        let mb_condition' = mb_condition <#> \condition -> G.substituteTerm sigma condition
+        -- check condition
+        check <- do
+          case mb_condition' of
+            Nothing -> pure true
+            Just condition -> checkCondition condition
+        if not check then pure [] else do
+          -- apply sigma to conclusion
+          let conclusion' = substitutePatch sigma conclusion
+          -- check subsumption
+          isSubsumed conclusion' >>= case _ of
+            true -> pure []
+            false -> pure [conclusion']
+
+checkCondition :: forall m. Monad m => G.Term G.LatticeType -> FixpointT m Boolean
+checkCondition = hole "checkCondition"
+
+--------------------------------------------------------------------------------
+-- Subsumption
+--------------------------------------------------------------------------------
+
+isSubsumed :: forall m. Monad m => Patch -> FixpointT m Boolean
+isSubsumed = hole "isSubsumed"
+
+
+

@@ -16,12 +16,16 @@ to generate this file without the comments in this block.
   , "console"
   , "effect"
   , "either"
+  , "foldable-traversable"
   , "lists"
   , "maybe"
+  , "ordered-collections"
   , "partial"
   , "prelude"
   , "transformers"
   , "tuples"
+  , "unordered-collections"
+  , "variant"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
