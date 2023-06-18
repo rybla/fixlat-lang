@@ -1,14 +1,14 @@
 module Language.Fixlat.Core.InternalFixpoint where
 
-import Prelude
 import Data.Either.Nested
 import Data.Tuple.Nested
+import Prelude
+
 import Control.Monad.State (StateT, gets, lift, modify, modify_)
 import Data.Array as Array
-import Data.Bifunctor (bimap)
 import Data.Either (Either(..))
 import Data.Foldable (for_, traverse_)
-import Data.List (List)
+import Data.List (List(..))
 import Data.List as List
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
@@ -49,11 +49,12 @@ _comparePatch = Proxy :: Proxy "comparePatch"
 type Patch = Patch_ G.TermName
 data Patch_ x 
   = ApplyPatch
-    (Array G.Quantification) -- quantifications before hypothesis proposition
-    (G.Proposition_ x G.LatticeType) -- hypothesis proposition
-    (Maybe (G.Term_ x G.LatticeType)) -- filter term (boolean-valued)
-    Patch -- conclusion patch
-  | PropositionPatch (G.Proposition_ x G.LatticeType)
+      (Array G.Quantification) -- quantifications before hypothesis proposition
+      (G.Proposition_ x G.LatticeType) -- hypothesis proposition
+      (Maybe (G.Term_ x G.LatticeType)) -- filter term (boolean-valued)
+      Patch -- conclusion patch
+  | PropositionPatch 
+      (G.Proposition_ x G.LatticeType) -- conclusion proposition
 
 substitutePatch :: Map.Map G.TermName (G.Term G.LatticeType) -> Patch -> Patch
 substitutePatch = hole "substitutePatch"
@@ -123,10 +124,31 @@ data Index = Index (Array (G.Proposition G.LatticeType))
 -- | the index). If `prop` is subsumed by `index`, then `insertIntoIndex prop index
 -- | = Nothing`
 insertIntoIndex :: forall m. Monad m => G.Proposition G.LatticeType -> FixpointT m Boolean
-insertIntoIndex prop = hole "insertIntoIndex"
+insertIntoIndex prop = do
+  props <- getCandidates
+  go props >>= case _ of
+    Nothing -> pure false
+    Just props' -> do
+      modify_ _{index = Index (Array.fromFoldable props')}
+      pure true
+  where
+  go = flip Array.foldr (pure (Just Nil)) \prop' m_mb_props' -> do
+    m_mb_props' >>= case _ of 
+      Nothing -> pure Nothing
+      Just props' -> subsumes prop prop' >>= if _
+        -- If prop is subsumed by a proposition already in the index (prop'),
+        -- then we don't update the index (encoded by `Nothing` result)
+        then pure Nothing
+        -- Otherwise, we will update the index.
+        else subsumes prop' prop >>= if _
+          -- If a proposition in the index (prop') is subsumed by the new prop,
+          -- then remove prop' from the index
+          then pure (Just props')
+          -- Otherwise, keep the old proposition (prop') in the index
+          else pure (Just (Cons prop' props'))
 
 getCandidates :: forall m. Monad m => FixpointT m (Array (G.Proposition G.LatticeType))
-getCandidates = hole "getCandidates"
+getCandidates = gets _.index <#> \(Index props) -> props
 
 -- Learns `patch` by inserting into `index` anything new derived from the patch,
 -- and yields any new `patches` that are derived from the patch.
@@ -169,5 +191,5 @@ checkCondition = hole "checkCondition"
 isSubsumed :: forall m. Monad m => Patch -> FixpointT m Boolean
 isSubsumed = hole "isSubsumed"
 
-
-
+subsumes :: forall m. Monad m => G.Proposition G.LatticeType -> G.Proposition G.LatticeType -> FixpointT m Boolean
+subsumes = hole "subsumes"
