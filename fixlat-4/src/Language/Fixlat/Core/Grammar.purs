@@ -5,7 +5,9 @@ import Data.Variant
 import Prelude
 import Prim hiding (Type)
 
+import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
+import Data.Lattice (class PartialOrd)
 import Data.List (List)
 import Data.Map as Map
 import Data.Maybe (Maybe)
@@ -43,24 +45,30 @@ data LatticeType
 
 derive instance Generic LatticeType _
 instance Show LatticeType where show x = genericShow x
+instance Eq LatticeType where eq = genericEq
 
 --------------------------------------------------------------------------------
 -- Term
 --------------------------------------------------------------------------------
 
 -- A Term, annotated with type information.
+type TermLattice = Term LatticeType
 type Term = Term_ TermName
 data Term_ x ty
   = NeutralTerm FunctionName (Term_ x ty) ty
   | NamedTerm x ty
 
 derive instance Generic (Term_ x ty) _
-instance (Show x, Show ty) => Show (Term_ x ty) where show x = genericShow x
+instance (Show x, Show ty) => Show (Term_ x ty) where show = genericShow
+instance (Eq x, Eq ty) => Eq (Term_ x ty) where eq = genericEq
 
-trueTerm :: Term LatticeType
+instance PartialOrd TermLattice where
+  comparePartial = hole "PartialOrd TermLattice . comparePartial"
+
+trueTerm :: TermLattice
 trueTerm = hole "trueTerm"
 
-falseTerm :: Term LatticeType
+falseTerm :: TermLattice
 falseTerm = hole "falseTerm"
 
 substituteTerm :: forall ty. Map.Map TermName (Term ty) -> Term ty -> Term ty
@@ -87,11 +95,15 @@ data FunctionType = FunctionType (Array DataType) DataType
 data Relation = Relation LatticeType
 
 -- | A proposition of a particular instance of a Relation.
+type PropositionLattice = Proposition LatticeType
 type Proposition = Proposition_ TermName
 data Proposition_ x ty = Proposition (Term_ x ty)
 
 substituteProposition :: forall ty. Map.Map TermName (Term ty) -> Proposition ty -> Proposition ty
 substituteProposition _sigma = hole "substituteProposition"
+
+instance PartialOrd PropositionLattice where
+  comparePartial = hole "PartialOrd PropositionLattice . comparePartial"
 
 --------------------------------------------------------------------------------
 -- Rule
@@ -104,15 +116,15 @@ substituteProposition _sigma = hole "substituteProposition"
 -- | - filters, which are boolean Terms that can be use quantified variables in
 -- |   scope
 -- | - a single conclusion proposition
-data Rule = Rule (List RuleHypothesis) (Proposition LatticeType)
+data Rule = Rule (List RuleHypothesis) PropositionLattice
 
 -- TODO: actually `Array Quantification` isn't optimal, since we know that the
 -- order of consecutive existential quantifiers or consecutive universal
 -- quantifiers doesn't matter.
 data RuleHypothesis = RuleHypothesis
   (Array Quantification) -- quantifications before hypothesis proposition
-  (Proposition LatticeType) -- hypothesis proposition
-  (Maybe (Term LatticeType)) -- filter term (boolean-valued)
+  PropositionLattice -- hypothesis proposition
+  (Maybe TermLattice) -- filter term (boolean-valued)
 
 data Quantification = Quantification
   Quantifier
