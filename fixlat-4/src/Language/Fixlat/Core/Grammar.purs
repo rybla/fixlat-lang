@@ -14,6 +14,7 @@ import Data.Lattice (class PartialOrd)
 import Data.List (List)
 import Data.Map as Map
 import Data.Maybe (Maybe)
+import Data.Newtype (class Newtype)
 import Data.Set (Set)
 import Data.Show.Generic (genericShow)
 import Hole (hole)
@@ -23,15 +24,16 @@ import Prim as Prim
 -- Module
 --------------------------------------------------------------------------------
 
-data Module ty = Module (Array (Declaration ty))
+newtype Module = Module
+  { dataTypes :: Map.Map TypeName DataType
+  , latticeTypes :: Map.Map TypeName LatticeType
+  , functionSpecs :: Map.Map FunctionName FunctionSpec
+  , relations :: Map.Map RelationName Relation
+  , rules :: Map.Map RuleName Rule
+  , databaseSpecs :: Map.Map DatabaseSpecName DatabaseSpec
+  }
 
-type Declaration (ty :: Prim.Type) = Variant
-  ( dataType :: TypeName /\ DataType
-  , latticeType :: TypeName /\ LatticeType
-  , functionSpecs :: FunctionName /\ FunctionSpec
-  , relation :: RelationName /\ Relation
-  , rule :: RuleName /\ Rule
-  , indexSpec :: DatabaseSpecName /\ DatabaseSpec )
+derive instance Newtype Module _
 
 --------------------------------------------------------------------------------
 -- Type
@@ -190,12 +192,13 @@ data ExistentialQuantification = ExistentialQuantification TermName LatticeType
 -- Database
 --------------------------------------------------------------------------------
 
-data DatabaseSpec = DatabaseSpec (Array DatabaseSpecDeclaration)
+newtype DatabaseSpec = DatabaseSpec
+  { fixpoints :: Map.Map FixpointSpecName FixpointSpec
+  , queries :: Map.Map QuerySpecName QuerySpec
+  , insertions :: Map.Map InsertionSpecName InsertionSpec
+  }
 
-type DatabaseSpecDeclaration = Variant
-  ( fixpoint :: FixpointSpecName /\ FixpointSpec
-  , query :: QuerySpecName /\ QuerySpec
-  , insertion :: InsertionSpecName /\ InsertionSpec )
+derive instance Newtype DatabaseSpec _
 
 -- | An DatabaseSpec FixpointSpec specifies a derived function that populates the
 -- | DatabaseSpec with the FixpointSpec of the DatabaseSpec's Terms and the given

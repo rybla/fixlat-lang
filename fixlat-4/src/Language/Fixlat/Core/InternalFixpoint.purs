@@ -3,6 +3,7 @@ module Language.Fixlat.Core.InternalFixpoint where
 import Prelude
 
 import Control.Assert (assertI)
+import Control.Assert.Assertions (just)
 import Control.Monad.State (StateT, gets, modify_)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as Array
@@ -13,6 +14,7 @@ import Data.List (List(..))
 import Data.List as List
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
+import Data.Newtype (unwrap)
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
 import Effect.Class (class MonadEffect)
@@ -26,8 +28,11 @@ import Type.Proxy (Proxy(..))
 
 -- | Internal fixpoint implementation.
 fixpoint :: forall m. MonadEffect m => G.DatabaseSpecName -> G.FixpointSpecName -> ModuleT m Database
-fixpoint databaseSpecName fixpointSpecName = 
+fixpoint databaseSpecName fixpointSpecName = do
   -- TODO: initialize everything from input in queue?
+  moduleCtx <- getModuleCtx
+  let databaseSpec = assertI just $ databaseSpecName `Map.lookup` (unwrap moduleCtx.module).databaseSpecs
+  let fixpointSpec = assertI just $ fixpointSpecName `Map.lookup` (unwrap databaseSpec).fixpoints
   hole "fixpoint"
 
 --------------------------------------------------------------------------------
@@ -160,7 +165,7 @@ learn (PropositionPatch prop) = do
   -- Yield any new patches that are applications of rules that use the
   -- newly-derived prop
   moduleCtx <- lift getModuleCtx
-  join <<< Array.fromFoldable <<< Map.values <$> moduleCtx.rules `for` \rule -> do
+  join <<< Array.fromFoldable <<< Map.values <$> (unwrap moduleCtx.module).rules `for` \rule -> do
     applyRule rule (toSymbolicProposition prop) >>= case _ of
       Nothing -> pure []
       Just patch -> pure [patch]
@@ -206,9 +211,9 @@ checkCondition term = do
 --------------------------------------------------------------------------------
 
 isSubsumed :: forall m. MonadEffect m => Patch -> FixpointT m Boolean
-isSubsumed (ApplyPatch quants hyp mb_cond patch) = do
-  -- This patch is subsumed if ...
-  hole "isSubsumed ApplyPatch"
+isSubsumed (ApplyPatch _quants _hyp _mb_cond _patch) = do
+  -- TODO: should apply-patches be able to be subsumed? maybe not
+  pure false
 isSubsumed (PropositionPatch prop) = do
   -- This patch is subsumed if `prop` is subsumed by any of the propositions in
   -- the Database.
@@ -217,14 +222,7 @@ isSubsumed (PropositionPatch prop) = do
     false -> \_ -> pure false 
     true -> \prop' -> subsumes prop' prop
 
--- -- | `prop1` subsumes `prop2` if `forall sigma . prop1 >= prop2[sigma]`.
--- subsumes :: forall m. MonadEffect m => G.ConcreteProposition -> G.SymbolicProposition -> FixpointT m Boolean
--- subsumes prop1 prop2 = do
---   -- pure $ (prop1 ~? prop2) == Just GT
---   hole "subsumes"
-
 -- | `prop1` subsumes `prop2` if `prop1 >= prop2`.
 subsumes :: forall m. MonadEffect m => G.ConcreteProposition -> G.ConcreteProposition -> FixpointT m Boolean
 subsumes prop1 prop2 = do
-  -- pure $ (prop1 ~? prop2) == Just GT
-  hole "subsumes"
+  pure $ (prop1 ~? prop2) == Just GT

@@ -5,21 +5,15 @@ import Prelude
 import Language.Fixlat.Core.Grammar
 import Control.Monad.Reader (Reader, ReaderT(..), ask, runReader)
 import Control.Monad.Trans.Class (class MonadTrans)
-import Data.Map as Map
 import Type.Proxy (Proxy(..))
 
 newtype ModuleT :: forall k. (k -> Type) -> k -> Type
-newtype ModuleT m a = ModuleT (ReaderT ModuleContext m a)
+newtype ModuleT m a = ModuleT (ReaderT ModuleCtx m a)
 
 runModuleT (ModuleT m) = m
 
-type ModuleContext =
-  { dataTypes :: Map.Map TypeName DataType
-  , latticeTypes :: Map.Map TypeName LatticeType
-  , functionSpecs :: Map.Map FunctionName FunctionSpec
-  , relations :: Map.Map RelationName Relation
-  , rules :: Map.Map RuleName Rule
-  , indexSpecs :: Map.Map DatabaseSpecName DatabaseSpec
+type ModuleCtx =
+  { module :: Module
   }
 
 _dataTypes = Proxy :: Proxy "dataTypes"
@@ -30,7 +24,7 @@ _rules = Proxy :: Proxy "rules"
 _indexSpecs = Proxy :: Proxy "indexSpecs"
 
 class Monad m <= MonadModule m where
-  moduleT :: forall a. Reader ModuleContext a -> m a
+  moduleT :: forall a. Reader ModuleCtx a -> m a
 
 derive newtype instance Functor m => Functor (ModuleT m)
 derive newtype instance Applicative m => Applicative (ModuleT m)
