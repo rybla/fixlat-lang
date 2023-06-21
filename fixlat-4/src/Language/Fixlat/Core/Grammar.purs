@@ -5,12 +5,16 @@ import Data.Variant
 import Prelude
 import Prim hiding (Type)
 
+import Control.Assert (Assertion)
+import Control.Assert.Refined (class Refined)
+import Data.Bifunctor (class Bifunctor, lmap, rmap)
 import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
 import Data.Lattice (class PartialOrd)
 import Data.List (List)
 import Data.Map as Map
 import Data.Maybe (Maybe)
+import Data.Set (Set)
 import Data.Show.Generic (genericShow)
 import Hole (hole)
 import Prim as Prim
@@ -27,7 +31,7 @@ type Declaration (ty :: Prim.Type) = Variant
   , functionSpecs :: FunctionName /\ FunctionSpec
   , relation :: RelationName /\ Relation
   , rule :: RuleName /\ Rule
-  , indexSpec :: IndexSpecName /\ IndexSpec )
+  , indexSpec :: DatabaseSpecName /\ DatabaseSpec )
 
 --------------------------------------------------------------------------------
 -- Type
@@ -42,6 +46,7 @@ data DataType
 -- | underlying DataType.
 data LatticeType
   = NamedLatticeType TypeName
+  | BooleanLatticeType
 
 derive instance Generic LatticeType _
 instance Show LatticeType where show x = genericShow x
@@ -52,27 +57,48 @@ instance Eq LatticeType where eq = genericEq
 --------------------------------------------------------------------------------
 
 -- A Term, annotated with type information.
-type TermLattice = Term LatticeType
-type Term = Term_ TermName
-data Term_ x ty
-  = NeutralTerm FunctionName (Term_ x ty) ty
+type SymbolicTerm = LatticeTerm TermName
+type ConcreteTerm = LatticeTerm Void
+type LatticeTerm = Term LatticeType
+data Term ty x
+  = NeutralTerm FunctionName (Term ty x) ty
+  | ConstantTerm Constant ty
   | NamedTerm x ty
 
-derive instance Generic (Term_ x ty) _
-instance (Show x, Show ty) => Show (Term_ x ty) where show = genericShow
-instance (Eq x, Eq ty) => Eq (Term_ x ty) where eq = genericEq
+data Constant
+  = TrueConstant
+  | FalseConstant
 
-instance PartialOrd TermLattice where
-  comparePartial = hole "PartialOrd TermLattice . comparePartial"
+derive instance Generic (Term ty x) _
+instance (Show x, Show ty) => Show (Term ty x) where show x = genericShow x
+instance (Eq x, Eq ty) => Eq (Term ty x) where eq x y = genericEq x y
+derive instance Bifunctor Term
 
-trueTerm :: TermLattice
-trueTerm = hole "trueTerm"
+-- TODO: should this also be over SymbolicTerm?
+instance PartialOrd ConcreteTerm where
+  comparePartial = hole "PartialOrd SymbolicTerm . comparePartial"
 
-falseTerm :: TermLattice
-falseTerm = hole "falseTerm"
+derive instance Generic Constant _
+instance Show Constant where show x = genericShow x
+instance Eq Constant where eq x y = genericEq x y
 
-substituteTerm :: forall ty. Map.Map TermName (Term ty) -> Term ty -> Term ty
+substituteTerm :: Map.Map TermName SymbolicTerm -> SymbolicTerm -> SymbolicTerm
 substituteTerm _sigma = hole "substituteTerm"
+
+concreteTerm :: Assertion SymbolicTerm ConcreteTerm
+concreteTerm = 
+  { label: "concreteTerm"
+  , check: \_prop -> hole "concreteTerm.check"
+  }
+
+toSymbolicTerm :: ConcreteTerm -> SymbolicTerm
+toSymbolicTerm = rmap absurd
+
+trueTerm :: forall x. Term LatticeType x
+trueTerm = ConstantTerm TrueConstant BooleanLatticeType
+
+falseTerm :: forall x. Term LatticeType x
+falseTerm = ConstantTerm FalseConstant BooleanLatticeType
 
 --------------------------------------------------------------------------------
 -- Function
@@ -94,67 +120,94 @@ data FunctionType = FunctionType (Array DataType) DataType
 -- | the argument's lattice.
 data Relation = Relation LatticeType
 
--- | A proposition of a particular instance of a Relation.
-type PropositionLattice = Proposition LatticeType
-type Proposition = Proposition_ TermName
-data Proposition_ x ty = Proposition (Term_ x ty)
+--------------------------------------------------------------------------------
+-- Proposition
+--------------------------------------------------------------------------------
 
-substituteProposition :: forall ty. Map.Map TermName (Term ty) -> Proposition ty -> Proposition ty
+-- | A proposition of a particular instance of a Relation.
+type SymbolicProposition = Proposition LatticeType TermName
+type ConcreteProposition = Proposition LatticeType Void
+data Proposition ty x = Proposition (Term ty x)
+
+derive instance Bifunctor Proposition
+
+substituteProposition :: Map.Map TermName SymbolicTerm -> SymbolicProposition -> SymbolicProposition
 substituteProposition _sigma = hole "substituteProposition"
 
-instance PartialOrd PropositionLattice where
-  comparePartial = hole "PartialOrd PropositionLattice . comparePartial"
+concreteProposition :: Assertion SymbolicProposition ConcreteProposition
+concreteProposition = 
+  { label: "concreteProposition"
+  , check: \_prop -> hole "concreteProposition.check"
+  }
+
+toSymbolicProposition :: ConcreteProposition -> SymbolicProposition
+toSymbolicProposition = rmap absurd
+
+-- TODO: should this also be over SymbolicProposition?
+instance PartialOrd ConcreteProposition where
+  comparePartial = hole "PartialOrd ConcreteProposition . comparePartial"
 
 --------------------------------------------------------------------------------
 -- Rule
 --------------------------------------------------------------------------------
 
--- | An derivation Rule for deriving propositions of a Relation. A Rule has:
--- | - lattice-typed quantifiers, universal or existential, which are introduced
--- |   into scope for the nested Rule
--- | - hypothesis propositions
--- | - filters, which are boolean Terms that can be use quantified variables in
--- |   scope
--- | - a single conclusion proposition
-data Rule = Rule (List RuleHypothesis) PropositionLattice
+-- | An derivation Rule for deriving propositions of a Relation. A Rule is built
+-- | as a nested structure where each layer is one of the following:
+-- |   - Quantifications, which are introduced into scope for the nested Rule
+-- |   - Hypothesis proposition
+-- |   - Filter
+-- |
+-- | Finally, the last layer is the conclusion proposition.
+-- |
+-- | Requirements:
+-- |   - Each existentially-quantified variable must be used _only_ in
+-- |     hypotheses.
+-- |   - Each universally-quantified variable must be used in hypotheses and the
+-- |     conclusion.
+-- |   - Each universally-quantified variable must be used in the
+-- |     immediately-next hypothesis.
+data Rule
+  = QuantificationsRule Quantifications Rule
+  | PropositionRule SymbolicProposition Rule
+  | FilterRule SymbolicTerm Rule
+  | ConclusionRule SymbolicProposition
 
--- TODO: actually `Array Quantification` isn't optimal, since we know that the
--- order of consecutive existential quantifiers or consecutive universal
--- quantifiers doesn't matter.
-data RuleHypothesis = RuleHypothesis
-  (Array Quantification) -- quantifications before hypothesis proposition
-  PropositionLattice -- hypothesis proposition
-  (Maybe TermLattice) -- filter term (boolean-valued)
+instance Refined "Rule" Rule where
+  -- TODO: encode requirements
+  validate' = hole "validate Rule"
 
-data Quantification = Quantification
-  Quantifier
-  TermName
-  LatticeType
+-- | `Quantifications` is an alternating list of sets of universal/existential
+-- | quantifications. Each group is a set since the ordering among universals or
+-- | existentials doesn't matter.
+data Quantifications
+  = UniversalQuantifications (Set UniversalQuantification) (Maybe Quantifications)
+  | ExistentialQuantifications (Set ExistentialQuantification) (Maybe Quantifications)
 
-data Quantifier = Forall | Exists
+data UniversalQuantification = UniversalQuantification TermName LatticeType
+data ExistentialQuantification = ExistentialQuantification TermName LatticeType
 
 --------------------------------------------------------------------------------
--- Index
+-- Database
 --------------------------------------------------------------------------------
 
-data IndexSpec = IndexSpec (Array IndexSpecDeclaration)
+data DatabaseSpec = DatabaseSpec (Array DatabaseSpecDeclaration)
 
-type IndexSpecDeclaration = Variant
+type DatabaseSpecDeclaration = Variant
   ( fixpoint :: FixpointSpecName /\ FixpointSpec
   , query :: QuerySpecName /\ QuerySpec
   , insertion :: InsertionSpecName /\ InsertionSpec )
 
--- | An IndexSpec FixpointSpec specifies a derived function that populates the
--- | IndexSpec with the FixpointSpec of the IndexSpec's Terms and the given
+-- | An DatabaseSpec FixpointSpec specifies a derived function that populates the
+-- | DatabaseSpec with the FixpointSpec of the DatabaseSpec's Terms and the given
 -- | Rules.
 data FixpointSpec = FixpointSpec (Array RuleName)
 
--- | An IndexSpec InsertionSpec specifies a derived function that inserts Terms
--- | into the IndexSpec.
+-- | An DatabaseSpec InsertionSpec specifies a derived function that inserts Terms
+-- | into the DatabaseSpec.
 data InsertionSpec = InsertionSpec RelationName
 
--- | An IndexSpec QuerySpec specifies a derived function that queries Terms of a
--- | particular form from the IndexSpec. The QuerySpec is encoded as a Rule,
+-- | An DatabaseSpec QuerySpec specifies a derived function that queries Terms of a
+-- | particular form from the DatabaseSpec. The QuerySpec is encoded as a Rule,
 -- | which corresponds to QuerySpec that assumes the Rule's premises and looks
 -- | for a the lattice-maximal derivation of the conclusion.
 data QuerySpec = QuerySpec Rule
@@ -173,7 +226,7 @@ type TermName = Name "Term"
 type FunctionName = Name "function"
 type RelationName = Name "Relation"
 type RuleName = Name "Rule"
-type IndexSpecName = Name "index"
+type DatabaseSpecName = Name "index"
 type ModuleName = Name "module"
 type FixpointSpecName = Name "fixpoint"
 type QuerySpecName = Name "query"

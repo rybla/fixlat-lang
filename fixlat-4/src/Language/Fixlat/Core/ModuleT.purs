@@ -1,14 +1,16 @@
 module Language.Fixlat.Core.ModuleT where
 
-import Language.Fixlat.Core.Grammar
 import Prelude
 
-import Control.Monad.Reader (class MonadTrans, ReaderT, ask, runReaderT)
-import Control.Monad.State (class MonadTrans, StateT)
-import Control.Monad.Trans.Class (lift)
+import Language.Fixlat.Core.Grammar
+import Control.Monad.Reader (Reader, ReaderT(..), ask, runReader)
+import Control.Monad.Trans.Class (class MonadTrans)
 import Data.Map as Map
+import Type.Proxy (Proxy(..))
 
+newtype ModuleT :: forall k. (k -> Type) -> k -> Type
 newtype ModuleT m a = ModuleT (ReaderT ModuleContext m a)
+
 runModuleT (ModuleT m) = m
 
 type ModuleContext =
@@ -17,11 +19,18 @@ type ModuleContext =
   , functionSpecs :: Map.Map FunctionName FunctionSpec
   , relations :: Map.Map RelationName Relation
   , rules :: Map.Map RuleName Rule
-  , indexSpecs :: Map.Map IndexSpecName IndexSpec
+  , indexSpecs :: Map.Map DatabaseSpecName DatabaseSpec
   }
 
-class MonadModule m where
-  getModuleContext :: m ModuleContext
+_dataTypes = Proxy :: Proxy "dataTypes"
+_latticeTypes = Proxy :: Proxy "latticeTypes"
+_functionSpecs = Proxy :: Proxy "functionSpecs"
+_relations = Proxy :: Proxy "relations"
+_rules = Proxy :: Proxy "rules"
+_indexSpecs = Proxy :: Proxy "indexSpecs"
+
+class Monad m <= MonadModule m where
+  moduleT :: forall a. Reader ModuleContext a -> m a
 
 derive newtype instance Functor m => Functor (ModuleT m)
 derive newtype instance Applicative m => Applicative (ModuleT m)
@@ -30,5 +39,7 @@ derive newtype instance Bind m => Bind (ModuleT m)
 derive newtype instance Monad m => Monad (ModuleT m)
 derive newtype instance MonadTrans ModuleT
 
-instance (Monad m, MonadTrans t, MonadModule m) => MonadModule (t m) where
-  getModuleContext = lift getModuleContext
+instance Monad m => MonadModule (ModuleT m) where
+  moduleT r = ModuleT (ReaderT (pure <<< runReader r))
+
+getModuleCtx = moduleT ask

@@ -19,5 +19,5 @@ defaultEnv :: Env
 defaultEnv = hole "defaultEnv"
 
 -- | Evaluate a term, including functions.
-evaluate :: forall m. Monad m => MonadEffect m => TermLattice -> EvaluationT m TermLattice
+evaluate :: forall m. Monad m => MonadEffect m => ConcreteTerm -> EvaluationT m ConcreteTerm
 evaluate = hole "evaluate"

@@ -27,9 +27,9 @@ liftUnifyT = lift >>> lift >>> lift
 -- universal and existential quantifiers matters. Not exactly sure what data
 -- structure to use
 type Ctx = 
-  { quantifiers :: Array Quantification }
+  { quantifications :: Quantifications }
 
-type Sub = Map.Map TermName (Term LatticeType)
+type Sub = Map.Map TermName SymbolicTerm
 
 runUnifyT :: forall m a. Monad m => Ctx -> UnifyT m a -> ModuleT m (String \/ (a /\ Sub))
 runUnifyT ctx m = runStateT (runExceptT (runReaderT m ctx)) Map.empty >>= case _ of
@@ -45,11 +45,13 @@ runUnifyT ctx m = runStateT (runExceptT (runReaderT m ctx)) Map.empty >>= case _
 -- Unification algorithm
 --------------------------------------------------------------------------------
 
--- | Unify expectation with candidate
-unifyProposition :: forall m. Monad m => Proposition LatticeType -> Proposition LatticeType -> UnifyT m Unit
+-- | Unify expectation (symbolic, as it could be satisfied with many candidates)
+-- | with a candidate.
+unifyProposition :: forall m. Monad m => SymbolicProposition -> ConcreteProposition -> UnifyT m Unit
 unifyProposition = hole "unify"
 
--- | Unify expectation with candidate
-unifyTerm :: forall m. Monad m => Term LatticeType -> Term LatticeType -> UnifyT m Unit
+-- | Unify expectation (symbolic, as it couldbe satisfied with many candidates)
+-- | with candidate.
+unifyTerm :: forall m. Monad m => SymbolicTerm -> ConcreteTerm -> UnifyT m Unit
 unifyTerm = hole "unify"
 

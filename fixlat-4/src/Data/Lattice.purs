@@ -56,6 +56,8 @@ infixl 4 greaterThanPartial as >?
 
 infixl 4 greaterThanOrEqPartial as >=?
 
+infixl 4 incomparable as ><?
+
 minPartial :: forall a. PartialOrd a => a -> a -> Maybe a
 minPartial a1 a2 = churchIf a1 a2 <$> (a1 <? a2)
 
