@@ -4,7 +4,7 @@ import Prelude
 
 import Control.Assert (assertI)
 import Control.Assert.Assertions (just)
-import Control.Monad.State (StateT, gets, modify_)
+import Control.Monad.State (StateT, execStateT, gets, modify_)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as Array
 import Data.Either (Either(..))
@@ -20,7 +20,7 @@ import Data.Tuple.Nested ((/\))
 import Effect.Class (class MonadEffect)
 import Hole (hole)
 import Language.Fixlat.Core.Evaluation (evaluate, runEvaluationT)
-import Language.Fixlat.Core.Grammar (toSymbolicProposition)
+import Language.Fixlat.Core.Grammar (FixpointSpec(..), Rule, RuleName, toSymbolicProposition)
 import Language.Fixlat.Core.Grammar as G
 import Language.Fixlat.Core.ModuleT (ModuleT, getModuleCtx)
 import Language.Fixlat.Core.Unification (runUnifyT, unifyProposition)
@@ -33,7 +33,19 @@ fixpoint databaseSpecName fixpointSpecName = do
   moduleCtx <- getModuleCtx
   let databaseSpec = assertI just $ databaseSpecName `Map.lookup` (unwrap moduleCtx.module).databaseSpecs
   let fixpointSpec = assertI just $ fixpointSpecName `Map.lookup` (unwrap databaseSpec).fixpoints
-  hole "fixpoint"
+
+  let queue = hole "fixpoint.queue"
+
+  env <- execStateT loop
+    { database: Database []
+    , rules: Map.filterWithKey 
+        (\ruleName _ -> ruleName `Array.elem` (unwrap fixpointSpec).ruleNames)
+        (unwrap moduleCtx.module).rules
+    , queue
+    , comparePatch: hole "comparePatch"
+    }
+
+  pure env.database
 
 --------------------------------------------------------------------------------
 -- FixpointT
@@ -46,6 +58,7 @@ liftFixpointT = lift
 
 type FixpointEnv =
   { database :: Database
+  , rules :: Map.Map RuleName Rule
   , queue :: Queue
   , comparePatch :: Patch -> Patch -> Ordering
   }

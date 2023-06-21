@@ -203,7 +203,9 @@ derive instance Newtype DatabaseSpec _
 -- | An DatabaseSpec FixpointSpec specifies a derived function that populates the
 -- | DatabaseSpec with the FixpointSpec of the DatabaseSpec's Terms and the given
 -- | Rules.
-data FixpointSpec = FixpointSpec (Array RuleName)
+newtype FixpointSpec = FixpointSpec {ruleNames :: Array RuleName}
+
+derive instance Newtype FixpointSpec _
 
 -- | An DatabaseSpec InsertionSpec specifies a derived function that inserts Terms
 -- | into the DatabaseSpec.
