@@ -1,5 +1,6 @@
 module Language.Fixlat.Core.Grammar where
 
+import Data.Either.Nested
 import Data.Tuple.Nested
 import Data.Variant
 import Prelude
@@ -7,7 +8,7 @@ import Prim hiding (Type)
 
 import Control.Assert (Assertion)
 import Control.Assert.Refined (class Refined)
-import Data.Bifunctor (class Bifunctor, lmap, rmap)
+import Data.Bifunctor (class Bifunctor, bimap, lmap, rmap)
 import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
 import Data.Lattice (class PartialOrd)
@@ -169,14 +170,26 @@ instance PartialOrd ConcreteProposition where
 -- |   - Each universally-quantified variable must be used in the
 -- |     immediately-next hypothesis.
 data Rule
-  = QuantificationsRule Quantifications Rule
-  | PropositionRule SymbolicProposition Rule
-  | FilterRule SymbolicTerm Rule
-  | ConclusionRule SymbolicProposition
+  -- = QuantificationsRule Quantifications Rule
+  -- | PropositionRule SymbolicProposition Rule
+  -- | FilterRule SymbolicTerm Rule
+  = HypothesisRule
+      { quantifications :: Quantifications
+      , proposition :: SymbolicProposition
+      , filter :: Maybe SymbolicTerm
+      , conclusion :: Rule \/ SymbolicProposition }
 
 instance Refined "Rule" Rule where
   -- TODO: encode requirements
   validate' = hole "validate Rule"
+
+substituteRule :: Map.Map TermName SymbolicTerm -> Rule -> Rule
+substituteRule sigma (HypothesisRule rule) = 
+  HypothesisRule rule
+    { proposition = substituteProposition sigma rule.proposition
+    , filter = substituteTerm sigma <$> rule.filter
+    , conclusion = bimap (substituteRule sigma) (substituteProposition sigma) rule.conclusion
+    }
 
 -- | `Quantifications` is an alternating list of sets of universal/existential
 -- | quantifications. Each group is a set since the ordering among universals or

@@ -20,21 +20,21 @@ import Data.Tuple.Nested ((/\))
 import Effect.Class (class MonadEffect)
 import Hole (hole)
 import Language.Fixlat.Core.Evaluation (evaluate, runEvaluationT)
-import Language.Fixlat.Core.Grammar (FixpointSpec(..), Rule, RuleName, toSymbolicProposition)
 import Language.Fixlat.Core.Grammar as G
 import Language.Fixlat.Core.ModuleT (ModuleT, getModuleCtx)
 import Language.Fixlat.Core.Unification (runUnifyT, unifyProposition)
 import Type.Proxy (Proxy(..))
 
 -- | Internal fixpoint implementation.
-fixpoint :: forall m. MonadEffect m => G.DatabaseSpecName -> G.FixpointSpecName -> ModuleT m Database
-fixpoint databaseSpecName fixpointSpecName = do
-  -- TODO: initialize everything from input in queue?
+fixpoint :: forall m. MonadEffect m => Database -> G.DatabaseSpecName -> G.FixpointSpecName -> ModuleT m Database
+fixpoint (Database props) databaseSpecName fixpointSpecName = do
   moduleCtx <- getModuleCtx
   let databaseSpec = assertI just $ databaseSpecName `Map.lookup` (unwrap moduleCtx.module).databaseSpecs
   let fixpointSpec = assertI just $ fixpointSpecName `Map.lookup` (unwrap databaseSpec).fixpoints
 
-  let queue = hole "fixpoint.queue"
+  -- Initialize queue with patches that conclude with each prop in the database
+  -- i.e. everything starts off as out-of-date.
+  let queue = Queue (List.fromFoldable (ConclusionPatch <$> props))
 
   env <- execStateT loop
     { database: Database []
@@ -42,8 +42,7 @@ fixpoint databaseSpecName fixpointSpecName = do
         (\ruleName _ -> ruleName `Array.elem` (unwrap fixpointSpec).ruleNames)
         (unwrap moduleCtx.module).rules
     , queue
-    , comparePatch: hole "comparePatch"
-    }
+    , comparePatch: hole "comparePatch" }
 
   pure env.database
 
@@ -58,7 +57,7 @@ liftFixpointT = lift
 
 type FixpointEnv =
   { database :: Database
-  , rules :: Map.Map RuleName Rule
+  , rules :: Map.Map G.RuleName G.Rule
   , queue :: Queue
   , comparePatch :: Patch -> Patch -> Ordering
   }
@@ -68,13 +67,8 @@ _queue = Proxy :: Proxy "queue"
 _comparePatch = Proxy :: Proxy "comparePatch"
 
 data Patch
-  = ApplyPatch
-      G.Quantifications -- quantifications before hypothesis proposition
-      G.SymbolicProposition -- hypothesis proposition
-      (Maybe G.SymbolicTerm) -- filter term (boolean-valued)
-      Patch -- conclusion patch
-  | PropositionPatch 
-      G.ConcreteProposition -- conclusion proposition
+  = ApplyPatch G.Rule
+  | ConclusionPatch G.ConcreteProposition -- conclusion proposition
 
 substitutePatch :: Map.Map G.TermName G.SymbolicTerm -> Patch -> Patch
 substitutePatch sigma patch = do
@@ -173,46 +167,51 @@ getCandidates = gets _.database <#> \(Database props) -> props
 -- Learns `patch` by inserting into `database` anything new derived from the patch,
 -- and yields any new `patches` that are derived from the patch.
 learn :: forall m. MonadEffect m => Patch -> FixpointT m (Array Patch)
-learn (PropositionPatch prop) = do
+learn (ConclusionPatch prop) = do
   void $ insertIntoDatabase prop
   -- Yield any new patches that are applications of rules that use the
   -- newly-derived prop
   moduleCtx <- lift getModuleCtx
   join <<< Array.fromFoldable <<< Map.values <$> (unwrap moduleCtx.module).rules `for` \rule -> do
-    applyRule rule (toSymbolicProposition prop) >>= case _ of
-      Nothing -> pure []
-      Just patch -> pure [patch]
-learn (ApplyPatch quantifications expectation mb_condition conclusion) = do
+    applyRule rule prop
+-- learn (ApplyPatch quantifications expectation mb_condition conclusion) = do
+learn (ApplyPatch rule) = do
   -- For each candidate proposition in the database
   candidates <- getCandidates
   Array.concat <$> for candidates \candidate -> do
-    -- TODO: figure out structure of ctx for unification; maybe don't really need to know quantification types?
-    -- let ctx = {quantifiers}
-    liftFixpointT (runUnifyT {quantifications} (unifyProposition expectation candidate)) >>= case _ of
-      Left _err -> do
-        -- not unifiable, so ignore candidate
-        pure []
-      Right (_ /\ sigma) -> do
-        -- apply sigma to condition
-        let mb_condition' = mb_condition <#> \condition -> assertI G.concreteTerm $ G.substituteTerm sigma condition
-        -- check condition
-        check <- do
-          case mb_condition' of
-            Nothing -> pure true
-            Just condition -> checkCondition condition
-        if not check then pure [] else do
-          -- apply sigma to conclusion
-          let conclusion' = substitutePatch sigma conclusion
+    applyRule rule candidate
+
+appleRuleAsPatch :: forall m. MonadEffect m => G.Rule -> FixpointT m Patch
+appleRuleAsPatch rule = pure $ ApplyPatch rule
+
+applyRule :: forall m. MonadEffect m => G.Rule -> G.ConcreteProposition -> FixpointT m (Array Patch)
+applyRule (G.HypothesisRule rule) prop = do
+  -- TODO: unify hypothesis of rule with prop, and yield the patch that is the
+  -- rest of the rule
+  let ctx = {quantifications: rule.quantifications}
+  liftFixpointT (runUnifyT ctx (unifyProposition rule.proposition prop)) >>= case _ of
+    Left _err -> do
+      -- not unifiable, so ignore candidate
+      pure []
+    Right (_ /\ sigma) -> do
+      -- apply sigma to condition
+      let filter' = rule.filter <#> \condition -> assertI G.concreteTerm $ G.substituteTerm sigma condition
+      -- check condition
+      check <- do
+        case filter' of
+          Nothing -> pure true
+          Just condition -> checkCondition condition
+      if not check 
+        then pure [] 
+        else do
+          let patch = case rule.conclusion of
+                Right prop -> ConclusionPatch $ assertI G.concreteProposition $ G.substituteProposition sigma prop
+                Left rule' -> ApplyPatch $ G.substituteRule sigma rule'
+          let conclusion' = substitutePatch sigma patch
           -- check subsumption
           isSubsumed conclusion' >>= case _ of
             true -> pure []
             false -> pure [conclusion']
-
-applyRule :: forall m. MonadEffect m => G.Rule -> G.SymbolicProposition -> FixpointT m (Maybe Patch)
-applyRule rule prop = do
-  -- TODO: unify hypothesis of rule with prop, and yield the patch that is the
-  -- rest of the rule
-  hole "applyRule"
 
 checkCondition :: forall m. MonadEffect m => G.ConcreteTerm -> FixpointT m Boolean
 checkCondition term = do
@@ -224,10 +223,10 @@ checkCondition term = do
 --------------------------------------------------------------------------------
 
 isSubsumed :: forall m. MonadEffect m => Patch -> FixpointT m Boolean
-isSubsumed (ApplyPatch _quants _hyp _mb_cond _patch) = do
-  -- TODO: should apply-patches be able to be subsumed? maybe not
+isSubsumed (ApplyPatch _rule) = do
+  -- TODO: should apply-patches be able to be subsumed? maybe not?
   pure false
-isSubsumed (PropositionPatch prop) = do
+isSubsumed (ConclusionPatch prop) = do
   -- This patch is subsumed if `prop` is subsumed by any of the propositions in
   -- the Database.
   props <- getCandidates
