@@ -42,7 +42,9 @@ fixpoint (Database props) databaseSpecName fixpointSpecName = do
         (\ruleName _ -> ruleName `Array.elem` (unwrap fixpointSpec).ruleNames)
         (unwrap moduleCtx.module).rules
     , queue
-    , comparePatch: hole "comparePatch" }
+    -- TODO: this isn't right, but not sure how to do ordering yet, so this will
+    -- just ensure that the queue is first-in-first-out
+    , comparePatch: \_ _ -> LT }
 
   pure env.database
 
@@ -71,8 +73,8 @@ data Patch
   | ConclusionPatch G.ConcreteProposition -- conclusion proposition
 
 substitutePatch :: Map.Map G.TermName G.SymbolicTerm -> Patch -> Patch
-substitutePatch sigma patch = do
-  hole "substitutePatch"
+substitutePatch sigma (ConclusionPatch prop) = ConclusionPatch (assertI G.concreteProposition (G.substituteProposition sigma (G.toSymbolicProposition prop)))
+substitutePatch sigma (ApplyPatch rule) = ApplyPatch (G.substituteRule sigma rule)
 
 --------------------------------------------------------------------------------
 -- loop
@@ -143,7 +145,7 @@ insertIntoDatabase prop =
   getCandidates >>= go >>= case _ of
     Nothing -> pure false
     Just props' -> do
-      -- modify_ _{database = Database (Array.fromFoldable props')}
+      modify_ _{database = Database (Array.fromFoldable props')} 
       pure true
   where
   go = flip Array.foldr (pure (Just Nil)) \prop' m_mb_props' -> do
@@ -205,7 +207,7 @@ applyRule (G.HypothesisRule rule) prop = do
         then pure [] 
         else do
           let patch = case rule.conclusion of
-                Right prop -> ConclusionPatch $ assertI G.concreteProposition $ G.substituteProposition sigma prop
+                Right prop' -> ConclusionPatch $ assertI G.concreteProposition $ G.substituteProposition sigma prop'
                 Left rule' -> ApplyPatch $ G.substituteRule sigma rule'
           let conclusion' = substitutePatch sigma patch
           -- check subsumption
