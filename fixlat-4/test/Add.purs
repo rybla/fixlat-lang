@@ -53,7 +53,7 @@ module_ = emptyModule # Newtype.over Module _
         -- ------------------------
         --   zero + zero = zero
         Tuple _add_zero_zero $
-        Axiom $ add (tuple3 zero zero zero)
+        Axiom $ add (tuple3 (suc zero) zero zero)
       ]
   , rules = Map.fromFoldable 
       [ 

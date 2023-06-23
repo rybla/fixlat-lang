@@ -143,9 +143,10 @@ derive instance Bifunctor Term
 
 instance Pretty (Term ty TermName) where
   pretty = case _ of
-    NeutralTerm fun tm ty -> pretty fun <> parens (pretty tm)
-    PrimitiveTerm prim tms ty -> pretty prim <> parens (pretty tms)
-    NamedTerm x ty -> pretty x
+    NeutralTerm fun tm _ -> pretty fun <> parens (pretty tm)
+    PrimitiveTerm prim [] _ -> pretty prim
+    PrimitiveTerm prim tms _ -> pretty prim <> parens (pretty tms)
+    NamedTerm x _ -> pretty x
 
 instance Pretty (Term ty Void) where pretty = pretty <<< toSymbolicTerm
 
