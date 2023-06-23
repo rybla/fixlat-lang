@@ -3,44 +3,60 @@ module Language.Fixlat.Core.InternalFixpoint where
 import Prelude
 
 import Control.Assert (assertI)
-import Control.Assert.Assertions (just)
-import Control.Monad.State (StateT, execStateT, gets, modify_)
+import Control.Assert.Assertions (just, keyOfMap)
+import Control.Bug (bug)
+import Control.Debug as Debug
+import Control.Monad.State (StateT, execStateT, gets, modify, modify_)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as Array
 import Data.Either (Either(..))
 import Data.Foldable (traverse_)
+import Data.Generic.Rep (class Generic)
 import Data.Lattice ((~?))
 import Data.List (List(..))
 import Data.List as List
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
+import Data.Show.Generic (genericShow)
+import Data.String as String
 import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
 import Effect.Class (class MonadEffect)
 import Hole (hole)
 import Language.Fixlat.Core.Evaluation (evaluate, runEvaluationT)
+import Language.Fixlat.Core.Grammar (Axiom(..))
 import Language.Fixlat.Core.Grammar as G
 import Language.Fixlat.Core.ModuleT (ModuleT, getModuleCtx)
 import Language.Fixlat.Core.Unification (runUnifyT, unifyProposition)
+import Text.Pretty (class Pretty, bullets, indent, pretty, (<+>))
 import Type.Proxy (Proxy(..))
+
+_INITIAL_GAS = 10
 
 -- | Internal fixpoint implementation.
 fixpoint :: forall m. MonadEffect m => Database -> G.DatabaseSpecName -> G.FixpointSpecName -> ModuleT m Database
 fixpoint (Database props) databaseSpecName fixpointSpecName = do
+  Debug.debugA "[fixpoint]"
   moduleCtx <- getModuleCtx
-  let databaseSpec = assertI just $ databaseSpecName `Map.lookup` (unwrap moduleCtx.module).databaseSpecs
+  let databaseSpec = assertI just $ databaseSpecName `Map.lookup` (unwrap moduleCtx.module_).databaseSpecs
   let fixpointSpec = assertI just $ fixpointSpecName `Map.lookup` (unwrap databaseSpec).fixpoints
+
+  let axioms = (unwrap fixpointSpec).axiomNames <#> \axiomName -> 
+        assertI keyOfMap (axiomName /\ (unwrap moduleCtx.module_).axioms)
+  let props' = props <> (axioms <#> \(Axiom prop) -> prop)
 
   -- Initialize queue with patches that conclude with each prop in the database
   -- i.e. everything starts off as out-of-date.
-  let queue = Queue (List.fromFoldable (ConclusionPatch <$> props))
+  let queue = Queue (List.fromFoldable (ConclusionPatch <$> props'))
+  Debug.debugA $ "[fixpoint] queue:\n" <> pretty queue
 
   env <- execStateT loop
-    { database: Database []
+    { gas: _INITIAL_GAS
+    , database: Database []
     , rules: Map.filterWithKey 
         (\ruleName _ -> ruleName `Array.elem` (unwrap fixpointSpec).ruleNames)
-        (unwrap moduleCtx.module).rules
+        (unwrap moduleCtx.module_).rules
     , queue
     -- TODO: this isn't right, but not sure how to do ordering yet, so this will
     -- just ensure that the queue is first-in-first-out
@@ -58,7 +74,8 @@ liftFixpointT :: forall m a. MonadEffect m => ModuleT m a -> FixpointT m a
 liftFixpointT = lift
 
 type FixpointEnv =
-  { database :: Database
+  { gas :: Int
+  , database :: Database
   , rules :: Map.Map G.RuleName G.Rule
   , queue :: Queue
   , comparePatch :: Patch -> Patch -> Ordering
@@ -72,6 +89,13 @@ data Patch
   = ApplyPatch G.Rule
   | ConclusionPatch G.ConcreteProposition -- conclusion proposition
 
+derive instance Generic Patch _
+instance Show Patch where show x = genericShow x
+
+instance Pretty Patch where
+  pretty (ApplyPatch rule) = pretty rule
+  pretty (ConclusionPatch prop) = pretty prop
+
 substitutePatch :: Map.Map G.TermName G.SymbolicTerm -> Patch -> Patch
 substitutePatch sigma (ConclusionPatch prop) = ConclusionPatch (assertI G.concreteProposition (G.substituteProposition sigma (G.toSymbolicProposition prop)))
 substitutePatch sigma (ApplyPatch rule) = ApplyPatch (G.substituteRule sigma rule)
@@ -82,28 +106,39 @@ substitutePatch sigma (ApplyPatch rule) = ApplyPatch (G.substituteRule sigma rul
 
 loop :: forall m. MonadEffect m => FixpointT m Unit
 loop = do
-  -- pop next patch from queue
-  pop >>= case _ of
-    Nothing -> 
-      -- no more patches; done
-      pure unit
-    Just patch -> do
-      -- learn patch, yielding new patches
-      learn patch >>= case _ of
-        [] -> do
-          -- finished learning; done
-          pure unit
-        patches -> do
-          -- insert new patches into queue
-          traverse_ insert patches
-          -- loop
-          loop
+  gas <- _.gas <$> modify \env -> env {gas = env.gas - 1}
+  if gas <= 0 then bug "[loop] out of gas" else do
+    pop >>= case _ of
+      Nothing -> 
+        -- no more patches; done
+        pure unit
+      Just patch -> do
+        do
+          Debug.debugA $ "[loop] patch:" <+> pretty patch
+          queue <- gets _.queue
+          Debug.debugA $ "[fixpoint] queue:\n" <> pretty queue
+        -- learn patch, yielding new patches
+        learn patch >>= case _ of
+          [] -> do
+            -- finished learning; done
+            pure unit
+          patches -> do
+            -- insert new patches into queue
+            traverse_ insert patches
+            -- loop
+            loop
 
 --------------------------------------------------------------------------------
 -- Queue
 --------------------------------------------------------------------------------
 
 data Queue = Queue (List Patch)
+
+derive instance Generic Queue _
+instance Show Queue where show x = genericShow x
+
+instance Pretty Queue where
+  pretty (Queue queue) = bullets (Array.fromFoldable (pretty <$> queue))
 
 -- Remove next items from queue until get one that is not subsumed by current
 -- knowledge.
@@ -134,6 +169,12 @@ insert patch = do
 
 -- | A Database stores all current rules, which includes 
 data Database = Database (Array G.ConcreteProposition)
+
+derive instance Generic Database _
+instance Show Database where show x = genericShow x
+
+emptyDatabase :: Database
+emptyDatabase = Database []
 
 -- | Insert a proposition into an Database, respective subsumption (i.e. removes
 -- | propositions in the Database that are subsumed by the new proposition, and
@@ -174,7 +215,7 @@ learn (ConclusionPatch prop) = do
   -- Yield any new patches that are applications of rules that use the
   -- newly-derived prop
   moduleCtx <- lift getModuleCtx
-  join <<< Array.fromFoldable <<< Map.values <$> (unwrap moduleCtx.module).rules `for` \rule -> do
+  join <<< Array.fromFoldable <<< Map.values <$> (unwrap moduleCtx.module_).rules `for` \rule -> do
     applyRule rule prop
 -- learn (ApplyPatch quantifications expectation mb_condition conclusion) = do
 learn (ApplyPatch rule) = do
@@ -187,17 +228,18 @@ appleRuleAsPatch :: forall m. MonadEffect m => G.Rule -> FixpointT m Patch
 appleRuleAsPatch rule = pure $ ApplyPatch rule
 
 applyRule :: forall m. MonadEffect m => G.Rule -> G.ConcreteProposition -> FixpointT m (Array Patch)
-applyRule (G.HypothesisRule rule) prop = do
+applyRule (G.HypothesisRule hyp conc) prop = do
   -- TODO: unify hypothesis of rule with prop, and yield the patch that is the
   -- rest of the rule
-  let ctx = {quantifications: rule.quantifications}
-  liftFixpointT (runUnifyT ctx (unifyProposition rule.proposition prop)) >>= case _ of
+  let ctx = {quantifications: hyp.quantifications}
+  liftFixpointT (runUnifyT ctx (unifyProposition hyp.proposition prop)) >>= case _ of
     Left _err -> do
       -- not unifiable, so ignore candidate
       pure []
-    Right (_ /\ sigma) -> do
+    Right (_ /\ _sigma) -> do
+      let sigma = G.toSymbolicTerm <$> _sigma
       -- apply sigma to condition
-      let filter' = rule.filter <#> \condition -> assertI G.concreteTerm $ G.substituteTerm sigma condition
+      let filter' = hyp.filter <#> \condition -> assertI G.concreteTerm $ G.substituteTerm sigma condition
       -- check condition
       check <- do
         case filter' of
@@ -206,7 +248,7 @@ applyRule (G.HypothesisRule rule) prop = do
       if not check 
         then pure [] 
         else do
-          let patch = case rule.conclusion of
+          let patch = case conc of
                 Right prop' -> ConclusionPatch $ assertI G.concreteProposition $ G.substituteProposition sigma prop'
                 Left rule' -> ApplyPatch $ G.substituteRule sigma rule'
           let conclusion' = substitutePatch sigma patch

@@ -13,7 +13,7 @@ newtype ModuleT m a = ModuleT (ReaderT ModuleCtx m a)
 runModuleT (ModuleT m) = m
 
 type ModuleCtx =
-  { module :: Module
+  { module_ :: Module
   }
 
 _dataTypes = Proxy :: Proxy "dataTypes"

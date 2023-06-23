@@ -16,8 +16,8 @@ runEvaluationT :: forall m a. Monad m => EvaluationT m a -> ModuleT m a
 runEvaluationT m = runReaderT m defaultEnv
 
 defaultEnv :: Env
-defaultEnv = hole "defaultEnv"
+defaultEnv = {}
 
 -- | Evaluate a term, including functions.
 evaluate :: forall m. Monad m => MonadEffect m => ConcreteTerm -> EvaluationT m ConcreteTerm
-evaluate = hole "evaluate"
+evaluate _ = hole "evaluate"

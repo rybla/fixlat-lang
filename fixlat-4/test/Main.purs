@@ -3,9 +3,10 @@ module Test.Main where
 import Prelude
 
 import Effect (Effect)
-import Effect.Class.Console (log)
+import Effect.Class.Console as Console
+import Test.Add as Add
 
 main :: Effect Unit
 main = do
-  log "🍝"
-  log "You should add some tests."
+  Console.log "[Test.Main.main]"
+  Add.main

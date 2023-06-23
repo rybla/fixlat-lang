@@ -13,6 +13,7 @@ to generate this file without the comments in this block.
 { name = "fixlat-4"
 , dependencies =
   [ "arrays"
+  , "bifunctors"
   , "console"
   , "effect"
   , "either"
@@ -24,6 +25,7 @@ to generate this file without the comments in this block.
   , "partial"
   , "prelude"
   , "record"
+  , "strings"
   , "transformers"
   , "tuples"
   , "unordered-collections"

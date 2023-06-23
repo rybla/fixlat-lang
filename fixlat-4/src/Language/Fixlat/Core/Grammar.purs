@@ -6,20 +6,27 @@ import Data.Variant
 import Prelude
 import Prim hiding (Type)
 
-import Control.Assert (Assertion)
+import Control.Assert (Assertion, assert)
+import Control.Assert.Assertions (equal, exactLength)
 import Control.Assert.Refined (class Refined)
+import Control.Bug (bug)
+import Data.AlternatingList (AlternatingList)
 import Data.Bifunctor (class Bifunctor, bimap, lmap, rmap)
+import Data.Either (Either(..))
 import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
-import Data.Lattice (class PartialOrd)
+import Data.Lattice (class PartialOrd, comparePartial)
 import Data.List (List)
 import Data.Map as Map
-import Data.Maybe (Maybe)
+import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
+import Data.Ord.Generic (genericCompare)
 import Data.Set (Set)
 import Data.Show.Generic (genericShow)
+import Data.Traversable (traverse)
 import Hole (hole)
 import Prim as Prim
+import Text.Pretty (class Pretty, indent, lines, parens, pretty, ticks, (<+>))
 
 --------------------------------------------------------------------------------
 -- Module
@@ -31,10 +38,33 @@ newtype Module = Module
   , functionSpecs :: Map.Map FunctionName FunctionSpec
   , relations :: Map.Map RelationName Relation
   , rules :: Map.Map RuleName Rule
+  , axioms :: Map.Map AxiomName Axiom
   , databaseSpecs :: Map.Map DatabaseSpecName DatabaseSpec
   }
 
 derive instance Newtype Module _
+
+instance Pretty Module where
+  pretty (Module modl) = lines
+    [ "module:"
+    , indent $ lines
+        [ "dataTypes:" <+> indent (pretty modl.dataTypes)
+        , "latticeTypes:" <+> indent (pretty modl.latticeTypes)
+        , "functionSpecs:" <+> indent (pretty modl.functionSpecs)
+        , "relations:" <+> indent (pretty modl.relations)
+        , "rules:" <+> indent (pretty modl.rules)
+        , "axioms:" <+> indent (pretty modl.axioms)
+        , "databaseSpecs:" <+> indent (pretty modl.databaseSpecs) ] ]
+
+emptyModule :: Module
+emptyModule = Module
+  { dataTypes: Map.empty
+  , latticeTypes: Map.empty
+  , functionSpecs: Map.empty
+  , relations: Map.empty
+  , rules: Map.empty
+  , axioms: Map.empty
+  , databaseSpecs: Map.empty }
 
 --------------------------------------------------------------------------------
 -- Type
@@ -43,17 +73,55 @@ derive instance Newtype Module _
 -- | A DataType encodes the structure of the Terms of a type, but not a lattice
 -- | ordering over them.
 data DataType
-  = NamedDataType TypeName
+  = BoolDataType
+  | IntDataType
+  | NatDataType
+  | TupleDataType DataType DataType
+
+derive instance Generic DataType _
+instance Show DataType where show x = genericShow x
+derive instance Eq DataType 
+derive instance Ord DataType
+
+instance Pretty DataType where
+  pretty = case _ of
+    BoolDataType -> "bool"
+    IntDataType -> "int"
+    NatDataType -> "nat"
+    TupleDataType ty1 ty2 -> "tuple" <+> parens (pretty ty1) <+> parens (pretty ty2)
 
 -- | A LatticeType specifies a lattice ordering over a uniquely deTermined
 -- | underlying DataType.
 data LatticeType
-  = NamedLatticeType TypeName
-  | BooleanLatticeType
+  = BoolLatticeType
+  | IntLatticeType
+  | NatLatticeType
+  | OpLatticeType LatticeType
+  | DiscreteLatticeType DataType
+  | TupleLatticeType TupleOrdering LatticeType LatticeType
 
 derive instance Generic LatticeType _
 instance Show LatticeType where show x = genericShow x
-instance Eq LatticeType where eq = genericEq
+derive instance Eq LatticeType 
+derive instance Ord LatticeType
+
+instance Pretty LatticeType where
+  pretty = case _ of
+    BoolLatticeType -> "bool"
+    IntLatticeType -> "int"
+    NatLatticeType -> "nat"
+    OpLatticeType lty -> "op" <+> parens (pretty lty)
+    DiscreteLatticeType ty -> "discrete" <+> parens (pretty ty)
+    TupleLatticeType LexicographicTupleOrdering lty1 lty2 -> "tuple" <+> parens (pretty lty1) <+> parens (pretty lty2)
+
+data TupleOrdering
+  = LexicographicTupleOrdering
+
+derive instance Generic TupleOrdering _
+instance Show TupleOrdering where show x = genericShow x
+derive instance Eq TupleOrdering
+derive instance Ord TupleOrdering
+
 
 --------------------------------------------------------------------------------
 -- Term
@@ -65,43 +133,108 @@ type ConcreteTerm = LatticeTerm Void
 type LatticeTerm = Term LatticeType
 data Term ty x
   = NeutralTerm FunctionName (Term ty x) ty
-  | ConstantTerm Constant ty
+  | PrimitiveTerm Primitive (Array (Term ty x)) ty
   | NamedTerm x ty
-
-data Constant
-  = TrueConstant
-  | FalseConstant
 
 derive instance Generic (Term ty x) _
 instance (Show x, Show ty) => Show (Term ty x) where show x = genericShow x
-instance (Eq x, Eq ty) => Eq (Term ty x) where eq x y = genericEq x y
+derive instance (Eq x, Eq ty) => Eq (Term ty x)
 derive instance Bifunctor Term
+
+instance Pretty (Term ty TermName) where
+  pretty = case _ of
+    NeutralTerm fun tm ty -> pretty fun <> parens (pretty tm)
+    PrimitiveTerm prim tms ty -> pretty prim <> parens (pretty tms)
+    NamedTerm x ty -> pretty x
+
+instance Pretty (Term ty Void) where pretty = pretty <<< toSymbolicTerm
 
 -- TODO: should this also be over SymbolicTerm?
 instance PartialOrd ConcreteTerm where
-  comparePartial = hole "PartialOrd SymbolicTerm . comparePartial"
 
-derive instance Generic Constant _
-instance Show Constant where show x = genericShow x
-instance Eq Constant where eq x y = genericEq x y
+  comparePartial term@(NeutralTerm _ _ _) _ = bug $ "In order to compare concrete terms, they must be fully simplified. However, you attempted to compare a neutral term " <> ticks (show term) <> "."
+  comparePartial _ term@(NeutralTerm _ _ _) = bug $ "In order to compare concrete terms, they must be fully simplified. However, you attempted to compare a neutral term " <> ticks (show term) <> "."
+
+  comparePartial (NamedTerm x _) _ = absurd x
+  comparePartial _ (NamedTerm x _) = absurd x
+
+  comparePartial (PrimitiveTerm p1 args1 _lty1) (PrimitiveTerm p2 args2 _lty2) =
+    assert equal (_lty1 /\ _lty2) \_ -> do
+      let lty = _lty1
+      case lty of
+        OpLatticeType lty' -> comparePartial (PrimitiveTerm p2 args2 lty') (PrimitiveTerm p1 args1 lty')
+        DiscreteLatticeType _ -> if (p1 /\ args1) == (p2 /\ args2) then Just EQ else Nothing
+        TupleLatticeType LexicographicTupleOrdering _ _ -> case (p1 /\ args1) /\ (p2 /\ args2) of
+          (TuplePrimitive /\ [x1, y1]) /\ (TuplePrimitive /\ [x2, y2]) -> case comparePartial x1 x2 of
+            Just EQ -> comparePartial y1 y2
+            mc -> mc
+        BoolLatticeType -> case (p1 /\ args1) /\ (p2 /\ args2) of
+          (FalsePrimitive /\ []) /\ (FalsePrimitive /\ []) -> Just EQ
+          (FalsePrimitive /\ []) /\ (TruePrimitive /\ []) -> Just LT
+          (TruePrimitive /\ []) /\ (FalsePrimitive /\ []) -> Just GT
+          (TruePrimitive /\ []) /\ (TruePrimitive /\ []) -> Just EQ
+        IntLatticeType -> case (p1 /\ args1) /\ (p2 /\ args2) of
+          (ZeroPrimitive /\ []) /\ (ZeroPrimitive /\ []) -> Just EQ
+          (ZeroPrimitive /\ []) /\ (SucPrimitive /\ []) -> Just LT
+          (SucPrimitive /\ []) /\ (ZeroPrimitive /\ []) -> Just GT
+          (SucPrimitive /\ [x1]) /\ (SucPrimitive /\ [x2]) -> comparePartial x1 x2
+        NatLatticeType -> case (p1 /\ args1) /\ (p2 /\ args2) of
+          (IntPrimitive x1 /\ []) /\ (IntPrimitive x2 /\ []) -> Just (compare x1 x2)
+
+typeOfTerm :: forall ty x. Term ty x -> ty
+typeOfTerm (NeutralTerm _ _ ty) = ty
+typeOfTerm (PrimitiveTerm _ _ ty) = ty
+typeOfTerm (NamedTerm _ ty) = ty
+
+data Primitive 
+  = ZeroPrimitive
+  | SucPrimitive
+  | TruePrimitive
+  | FalsePrimitive
+  | TuplePrimitive
+  | IntPrimitive Int
+
+derive instance Generic Primitive _
+instance Show Primitive where show x = genericShow x
+derive instance Eq Primitive
+derive instance Ord Primitive
+
+instance Pretty Primitive where 
+  pretty = case _ of
+    ZeroPrimitive -> "zero"
+    SucPrimitive -> "suc"
+    TruePrimitive -> "true"
+    FalsePrimitive -> "false"
+    TuplePrimitive -> "tuple"
+    IntPrimitive x -> pretty x
 
 substituteTerm :: Map.Map TermName SymbolicTerm -> SymbolicTerm -> SymbolicTerm
-substituteTerm _sigma = hole "substituteTerm"
+substituteTerm sigma (NeutralTerm fun tm ty) = NeutralTerm fun (substituteTerm sigma tm) ty
+substituteTerm sigma (PrimitiveTerm prim tms ty) = PrimitiveTerm prim (substituteTerm sigma <$> tms) ty
+substituteTerm sigma (NamedTerm x ty) = case Map.lookup x sigma of
+  Just tm -> tm
+  Nothing -> NamedTerm x ty
 
 concreteTerm :: Assertion SymbolicTerm ConcreteTerm
 concreteTerm = 
   { label: "concreteTerm"
-  , check: \_prop -> hole "concreteTerm.check"
+  , check: checkConcreteTerm
   }
 
-toSymbolicTerm :: ConcreteTerm -> SymbolicTerm
+checkConcreteTerm :: SymbolicTerm -> Either String ConcreteTerm
+checkConcreteTerm = case _ of
+  NeutralTerm fun tm ty -> NeutralTerm fun <$> checkConcreteTerm tm <*> pure ty
+  PrimitiveTerm prim tms ty -> PrimitiveTerm prim <$> traverse checkConcreteTerm tms <*> pure ty
+  term@(NamedTerm _ _) -> Left $ "Term " <> ticks (show term) <> " is not concrete."
+
+toSymbolicTerm :: forall ty. Term ty Void -> Term ty TermName
 toSymbolicTerm = rmap absurd
 
 trueTerm :: forall x. Term LatticeType x
-trueTerm = ConstantTerm TrueConstant BooleanLatticeType
+trueTerm = PrimitiveTerm TruePrimitive [] BoolLatticeType
 
 falseTerm :: forall x. Term LatticeType x
-falseTerm = ConstantTerm FalseConstant BooleanLatticeType
+falseTerm = PrimitiveTerm FalsePrimitive [] BoolLatticeType
 
 --------------------------------------------------------------------------------
 -- Function
@@ -110,10 +243,14 @@ falseTerm = ConstantTerm FalseConstant BooleanLatticeType
 -- TODO: any other metadata that a function needs?
 data FunctionSpec = FunctionSpec FunctionType
 
+instance Pretty FunctionSpec where pretty (FunctionSpec funTy) = "function:" <+> pretty funTy
+
 -- | A FunctionType, which can either be a data function (lattice-polymorphic)
 -- | or a lattice function (lattice-specific). Each use of a Function must be
 -- | monotonic.
 data FunctionType = FunctionType (Array DataType) DataType
+
+instance Pretty FunctionType where pretty (FunctionType args ret) = parens (pretty args) <+> "->" <+> pretty ret
 
 --------------------------------------------------------------------------------
 -- Relation
@@ -123,6 +260,8 @@ data FunctionType = FunctionType (Array DataType) DataType
 -- | the argument's lattice.
 data Relation = Relation LatticeType
 
+instance Pretty Relation where pretty (Relation lty) = "relation:" <+> pretty lty
+
 --------------------------------------------------------------------------------
 -- Proposition
 --------------------------------------------------------------------------------
@@ -130,25 +269,40 @@ data Relation = Relation LatticeType
 -- | A proposition of a particular instance of a Relation.
 type SymbolicProposition = Proposition LatticeType TermName
 type ConcreteProposition = Proposition LatticeType Void
-data Proposition ty x = Proposition (Term ty x)
+data Proposition ty x = Proposition RelationName (Term ty x)
 
+derive instance Generic (Proposition ty x) _
+instance (Show x, Show ty) => Show (Proposition ty x) where show x = genericShow x
 derive instance Bifunctor Proposition
 
+instance Pretty (Proposition ty TermName) where pretty (Proposition rel tm) = pretty rel <> parens (pretty tm)
+instance Pretty (Proposition ty Void) where pretty = pretty <<< toSymbolicProposition
+
 substituteProposition :: Map.Map TermName SymbolicTerm -> SymbolicProposition -> SymbolicProposition
-substituteProposition _sigma = hole "substituteProposition"
+substituteProposition sigma (Proposition rel arg) = Proposition rel (substituteTerm sigma arg)
 
 concreteProposition :: Assertion SymbolicProposition ConcreteProposition
 concreteProposition = 
   { label: "concreteProposition"
-  , check: \_prop -> hole "concreteProposition.check"
+  , check: \(Proposition rel tm) -> Proposition rel <$> checkConcreteTerm tm
   }
 
-toSymbolicProposition :: ConcreteProposition -> SymbolicProposition
+toSymbolicProposition :: forall ty. Proposition ty Void -> Proposition ty TermName
 toSymbolicProposition = rmap absurd
 
--- TODO: should this also be over SymbolicProposition?
 instance PartialOrd ConcreteProposition where
-  comparePartial = hole "PartialOrd ConcreteProposition . comparePartial"
+  comparePartial (Proposition rel1 arg1) (Proposition rel2 arg2) = 
+    assert equal (rel1 /\ rel2) \_ -> comparePartial arg1 arg2
+
+--------------------------------------------------------------------------------
+-- Axiom
+--------------------------------------------------------------------------------
+
+newtype Axiom = Axiom ConcreteProposition
+
+derive newtype instance Show Axiom
+
+instance Pretty Axiom where pretty (Axiom prop) = "axiom:" <+> pretty prop
 
 --------------------------------------------------------------------------------
 -- Rule
@@ -170,36 +324,74 @@ instance PartialOrd ConcreteProposition where
 -- |   - Each universally-quantified variable must be used in the
 -- |     immediately-next hypothesis.
 data Rule
-  -- = QuantificationsRule Quantifications Rule
-  -- | PropositionRule SymbolicProposition Rule
-  -- | FilterRule SymbolicTerm Rule
   = HypothesisRule
-      { quantifications :: Quantifications
-      , proposition :: SymbolicProposition
-      , filter :: Maybe SymbolicTerm
-      , conclusion :: Rule \/ SymbolicProposition }
+      RuleHypothesis
+      (Rule \/ SymbolicProposition)
+
+type RuleHypothesis = 
+  { quantifications :: Quantifications
+  , proposition :: SymbolicProposition
+  , filter :: Maybe SymbolicTerm
+  }
+
+derive instance Generic Rule _
+instance Show Rule where show x = genericShow x
+
+instance Pretty Rule where 
+  pretty (HypothesisRule hyp conc) = lines
+    [ "rule:"
+    , indent $ lines
+        [ "hypothesis:" <+> (indent $ lines
+            [ "quantifications:" <+> indent (pretty hyp.quantifications)
+            , "proposition:" <+> indent (pretty hyp.proposition)
+            , "filter:" <+> indent (pretty hyp.filter)
+            ])
+        , "conclusion:" <+> indent (pretty conc) ] ]
 
 instance Refined "Rule" Rule where
   -- TODO: encode requirements
-  validate' = hole "validate Rule"
+  -- validate' = hole "validate Rule"
+  validate' = \_ -> Nothing
 
 substituteRule :: Map.Map TermName SymbolicTerm -> Rule -> Rule
-substituteRule sigma (HypothesisRule rule) = 
-  HypothesisRule rule
-    { proposition = substituteProposition sigma rule.proposition
-    , filter = substituteTerm sigma <$> rule.filter
-    , conclusion = bimap (substituteRule sigma) (substituteProposition sigma) rule.conclusion
-    }
+substituteRule sigma (HypothesisRule hyp conc) = 
+  HypothesisRule
+    hyp 
+      { proposition = substituteProposition sigma hyp.proposition
+      , filter = substituteTerm sigma <$> hyp.filter }
+    (bimap (substituteRule sigma) (substituteProposition sigma) conc)
 
 -- | `Quantifications` is an alternating list of sets of universal/existential
 -- | quantifications. Each group is a set since the ordering among universals or
 -- | existentials doesn't matter.
-data Quantifications
-  = UniversalQuantifications (Set UniversalQuantification) (Maybe Quantifications)
-  | ExistentialQuantifications (Set ExistentialQuantification) (Maybe Quantifications)
+newtype Quantifications = Quantifications
+  (AlternatingList 
+    (Set UniversalQuantification)
+    (Set ExistentialQuantification))
+
+derive instance Newtype Quantifications _
+derive newtype instance Show Quantifications
+derive newtype instance Eq Quantifications
+
+instance Pretty Quantifications where pretty (Quantifications quants) = pretty quants
 
 data UniversalQuantification = UniversalQuantification TermName LatticeType
+
+derive instance Generic UniversalQuantification _
+instance Show UniversalQuantification where show x = genericShow x
+derive instance Eq UniversalQuantification
+derive instance Ord UniversalQuantification
+
+instance Pretty UniversalQuantification where pretty (UniversalQuantification x ty) = "∀" <> pretty x <> ":" <+> pretty ty
+
 data ExistentialQuantification = ExistentialQuantification TermName LatticeType
+
+derive instance Generic ExistentialQuantification _
+instance Show ExistentialQuantification where show x = genericShow x
+derive instance Eq ExistentialQuantification
+derive instance Ord ExistentialQuantification
+
+instance Pretty ExistentialQuantification where pretty (ExistentialQuantification x ty) = "∃" <> pretty x <> ":" <+> pretty ty
 
 --------------------------------------------------------------------------------
 -- Database
@@ -213,22 +405,52 @@ newtype DatabaseSpec = DatabaseSpec
 
 derive instance Newtype DatabaseSpec _
 
+instance Pretty DatabaseSpec where
+  pretty (DatabaseSpec database) = lines
+    [ "database:"
+    , indent $ lines
+      [ "fixpoints:" <+> indent (pretty database.fixpoints)
+      , "queries:" <+> indent (pretty database.queries)
+      , "insertions:" <+> indent (pretty database.insertions) ] ]
+
+emptyDatabaseSpec :: DatabaseSpec
+emptyDatabaseSpec = DatabaseSpec
+  { fixpoints: Map.empty
+  , queries: Map.empty
+  , insertions: Map.empty }
+
 -- | An DatabaseSpec FixpointSpec specifies a derived function that populates the
 -- | DatabaseSpec with the FixpointSpec of the DatabaseSpec's Terms and the given
 -- | Rules.
-newtype FixpointSpec = FixpointSpec {ruleNames :: Array RuleName}
+newtype FixpointSpec = FixpointSpec 
+  { axiomNames :: Array AxiomName
+  , ruleNames :: Array RuleName
+  }
 
 derive instance Newtype FixpointSpec _
+
+instance Pretty FixpointSpec where
+  pretty (FixpointSpec fixpoint) = lines
+    [ "fixpoint:"
+    , indent $ lines
+      [ "axioms:" <+> indent (pretty fixpoint.axiomNames)
+      , "rules:" <+> indent (pretty fixpoint.ruleNames) ] ]
 
 -- | An DatabaseSpec InsertionSpec specifies a derived function that inserts Terms
 -- | into the DatabaseSpec.
 data InsertionSpec = InsertionSpec RelationName
+
+instance Pretty InsertionSpec where
+  pretty (InsertionSpec rel) = "insertion" <+> pretty rel
 
 -- | An DatabaseSpec QuerySpec specifies a derived function that queries Terms of a
 -- | particular form from the DatabaseSpec. The QuerySpec is encoded as a Rule,
 -- | which corresponds to QuerySpec that assumes the Rule's premises and looks
 -- | for a the lattice-maximal derivation of the conclusion.
 data QuerySpec = QuerySpec Rule
+
+instance Pretty QuerySpec where
+  pretty (QuerySpec rule) = "query" <+> pretty rule
 
 --------------------------------------------------------------------------------
 -- Name
@@ -239,13 +461,17 @@ derive newtype instance Show (Name label)
 derive newtype instance Eq (Name label)
 derive newtype instance Ord (Name label)
 
-type TypeName = Name "type"
+type TypeName = Name "Type"
 type TermName = Name "Term"
-type FunctionName = Name "function"
+type FunctionName = Name "Function"
 type RelationName = Name "Relation"
 type RuleName = Name "Rule"
-type DatabaseSpecName = Name "index"
-type ModuleName = Name "module"
-type FixpointSpecName = Name "fixpoint"
-type QuerySpecName = Name "query"
-type InsertionSpecName = Name "insertion"
+type AxiomName = Name "Axiom"
+type DatabaseSpecName = Name "Database"
+type ModuleName = Name "Module"
+type FixpointSpecName = Name "Fixpoint"
+type QuerySpecName = Name "Query"
+type InsertionSpecName = Name "Insertion"
+
+instance Pretty (Name label) where
+  pretty (Name str) = str

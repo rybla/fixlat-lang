@@ -6,6 +6,9 @@ import Control.Assert (Assertion)
 import Control.Monad.Error.Class (throwError)
 import Data.Array (all)
 import Data.Array as Array
+import Data.Foldable (class Foldable)
+import Data.Foldable as Foldable
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\), (/\))
 
@@ -59,4 +62,23 @@ memberOfArray =
         "  - " <> show as
       Just i -> pure i
 
+  }
+
+exactLength :: forall a f. Foldable f => Show (f a) => Int -> Assertion (f a) Unit
+exactLength l = 
+  { label: "exactLength"
+  , check: \as -> if Foldable.length as == l then pure unit else
+      throwError $ 
+        "Expected a foldable of length " <> show l <> ", but got a foldable of length " <> show (Foldable.length as :: Int) <> ":\n" <>
+        "  - " <> show as
+  }
+
+keyOfMap :: forall k v. Show k => Ord k => Show v => Assertion (k /\ Map.Map k v) v
+keyOfMap =
+  { label: "keyOfMap"
+  , check: \(k /\ m) -> case Map.lookup k m of
+      Nothing -> throwError $
+        "Could not find the key '" <> show k <> "' in map:\n" <>
+        "  - " <> show m
+      Just v -> pure v
   }
