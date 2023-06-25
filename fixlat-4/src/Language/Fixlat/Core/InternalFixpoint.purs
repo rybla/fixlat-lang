@@ -2,7 +2,7 @@ module Language.Fixlat.Core.InternalFixpoint where
 
 import Prelude
 
-import Control.Assert (assertI)
+import Control.Assert (assert, assertI)
 import Control.Assert.Assertions (just, keyOfMap)
 import Control.Bug (bug)
 import Control.Debug as Debug
@@ -13,23 +13,22 @@ import Data.Either (Either(..))
 import Data.Foldable (traverse_)
 import Data.Generic.Rep (class Generic)
 import Data.Lattice ((~?))
-import Data.List (List(..))
+import Data.List (List(..), (:))
 import Data.List as List
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.Show.Generic (genericShow)
 import Data.String as String
-import Data.Traversable (for)
+import Data.Traversable (for, traverse)
 import Data.Tuple.Nested ((/\))
 import Effect.Class (class MonadEffect)
 import Hole (hole)
-import Language.Fixlat.Core.Evaluation (evaluate, runEvaluationT)
-import Language.Fixlat.Core.Grammar (Axiom(..))
+import Language.Fixlat.Core.Grammar (Axiom(..), Proposition)
 import Language.Fixlat.Core.Grammar as G
 import Language.Fixlat.Core.ModuleT (ModuleT, getModuleCtx)
 import Language.Fixlat.Core.Unification (runUnifyT, unifyProposition)
-import Text.Pretty (class Pretty, bullets, indent, pretty, (<+>))
+import Text.Pretty (class Pretty, bullets, indent, pretty, ticks, (<+>))
 import Type.Proxy (Proxy(..))
 
 _INITIAL_GAS = 10
@@ -37,7 +36,7 @@ _INITIAL_GAS = 10
 -- | Internal fixpoint implementation.
 fixpoint :: forall m. MonadEffect m => Database -> G.DatabaseSpecName -> G.FixpointSpecName -> ModuleT m Database
 fixpoint (Database props) databaseSpecName fixpointSpecName = do
-  Debug.debugA "[fixpoint]"
+  Debug.debugA "[fixpoint] start"
   moduleCtx <- getModuleCtx
   let databaseSpec = assertI just $ databaseSpecName `Map.lookup` (unwrap moduleCtx.module_).databaseSpecs
   let fixpointSpec = assertI just $ fixpointSpecName `Map.lookup` (unwrap databaseSpec).fixpoints
@@ -49,20 +48,25 @@ fixpoint (Database props) databaseSpecName fixpointSpecName = do
   -- Initialize queue with patches that conclude with each prop in the database
   -- i.e. everything starts off as out-of-date.
   let queue = Queue (List.fromFoldable (ConclusionPatch <$> props'))
-  Debug.debugA $ "[fixpoint] queue:\n" <> pretty queue
+  Debug.debugA $ "[fixpoint] initial queue:" <> pretty queue
 
-  env <- execStateT loop
-    { gas: _INITIAL_GAS
-    , database: Database []
-    , rules: Map.filterWithKey 
-        (\ruleName _ -> ruleName `Array.elem` (unwrap fixpointSpec).ruleNames)
-        (unwrap moduleCtx.module_).rules
-    , queue
-    -- TODO: this isn't right, but not sure how to do ordering yet, so this will
-    -- just ensure that the queue is first-in-first-out
-    , comparePatch: \_ _ -> LT }
+  let env = 
+        { gas: _INITIAL_GAS
+        , database: Database []
+        , rules: Map.filterWithKey 
+            (\ruleName _ -> ruleName `Array.elem` (unwrap fixpointSpec).ruleNames)
+            (unwrap moduleCtx.module_).rules
+        , queue
+        -- TODO: this isn't right, but not sure how to do ordering yet, so this will
+        -- just ensure that the queue is first-in-first-out
+        , comparePatch: \_ _ -> GT }
 
-  pure env.database
+  Debug.debugA $ "[fixpoint] initial env.rules:" <> pretty env.rules
+
+  env' <- execStateT loop env
+
+  Debug.debugA "[fixpoint] end"
+  pure env'.database
 
 --------------------------------------------------------------------------------
 -- FixpointT
@@ -106,6 +110,12 @@ substitutePatch sigma (ApplyPatch rule) = ApplyPatch (G.substituteRule sigma rul
 
 loop :: forall m. MonadEffect m => FixpointT m Unit
 loop = do
+  -- db <- gets _.database
+  -- Debug.debugA $ "[fixpoint] database:" <> pretty db
+
+  -- queue <- gets _.queue
+  -- Debug.debugA $ "[fixpoint] queue:" <> pretty queue
+
   gas <- _.gas <$> modify \env -> env {gas = env.gas - 1}
   if gas <= 0 then bug "[loop] out of gas" else do
     pop >>= case _ of
@@ -113,20 +123,13 @@ loop = do
         -- no more patches; done
         pure unit
       Just patch -> do
-        do
-          Debug.debugA $ "[loop] patch:" <+> pretty patch
-          queue <- gets _.queue
-          Debug.debugA $ "[fixpoint] queue:\n" <> pretty queue
+        Debug.debugA $ "[loop] patch:" <+> pretty patch
         -- learn patch, yielding new patches
-        learn patch >>= case _ of
-          [] -> do
-            -- finished learning; done
-            pure unit
-          patches -> do
-            -- insert new patches into queue
-            traverse_ insert patches
-            -- loop
-            loop
+        patches <- learn patch
+        -- insert new patches into queue
+        traverse_ insert patches
+        -- loop
+        loop
 
 --------------------------------------------------------------------------------
 -- Queue
@@ -173,6 +176,9 @@ data Database = Database (Array G.ConcreteProposition)
 derive instance Generic Database _
 instance Show Database where show x = genericShow x
 
+instance Pretty Database where
+  pretty (Database props) = bullets (Array.fromFoldable (pretty <$> props))
+
 emptyDatabase :: Database
 emptyDatabase = Database []
 
@@ -182,40 +188,49 @@ emptyDatabase = Database []
 -- | the Database). If `prop` is subsumed by `database`, then
 -- | `insertIntoDatabase prop database = Nothing`
 insertIntoDatabase :: forall m. MonadEffect m => G.ConcreteProposition -> FixpointT m Boolean
-insertIntoDatabase prop =
-  getCandidates >>= go >>= case _ of
+insertIntoDatabase prop = do
+  -- Debug.debugA $ "[insertIntoDatabase] prop:" <+> pretty prop
+  getPropositions >>= go >>= case _ of
     Nothing -> pure false
     Just props' -> do
-      modify_ _{database = Database (Array.fromFoldable props')} 
+      modify_ _{database = Database (Array.fromFoldable (prop : props'))}
       pure true
   where
   go = flip Array.foldr (pure (Just Nil)) \prop' m_mb_props' -> do
     m_mb_props' >>= case _ of 
       Nothing -> pure Nothing
-      Just props' -> subsumes prop prop' >>= if _
+      Just props' -> subsumes prop' prop >>= if _
         -- If prop is subsumed by a proposition already in the Database (prop'),
         -- then we don't update the Database (encoded by `Nothing` result)
-        then pure Nothing
+        then do
+          pure Nothing
         -- Otherwise, we will update the Database.
-        else subsumes prop' prop >>= if _
-          -- If a proposition in the Database (prop') is subsumed by the new prop,
-          -- then remove prop' from the Database
-          then pure (Just props')
+        else subsumes prop prop' >>= if _
+          -- If a proposition in the Database (prop') is subsumed by the new
+          -- prop, then remove prop' from the Database
+          then do
+            pure (Just props')
           -- Otherwise, keep the old proposition (prop') in the Database
-          else pure (Just (Cons prop' props'))
+          else do
+            pure (Just (Cons prop' props'))
 
+getPropositions :: forall m. MonadEffect m => FixpointT m (Array (G.ConcreteProposition))
+getPropositions = gets _.database <#> \(Database props) -> props
+
+-- TODO: take into account e.g. out-of-date-ness
 getCandidates :: forall m. MonadEffect m => FixpointT m (Array (G.ConcreteProposition))
 getCandidates = gets _.database <#> \(Database props) -> props
 
 -- Learns `patch` by inserting into `database` anything new derived from the patch,
 -- and yields any new `patches` that are derived from the patch.
 learn :: forall m. MonadEffect m => Patch -> FixpointT m (Array Patch)
-learn (ConclusionPatch prop) = do
+learn (ConclusionPatch _prop) = do
+  prop <- evaluateProposition _prop
   void $ insertIntoDatabase prop
   -- Yield any new patches that are applications of rules that use the
   -- newly-derived prop
-  moduleCtx <- lift getModuleCtx
-  join <<< Array.fromFoldable <<< Map.values <$> (unwrap moduleCtx.module_).rules `for` \rule -> do
+  rules <- gets _.rules
+  join <<< Array.fromFoldable <<< Map.values <$> rules `for` \rule -> do
     applyRule rule prop
 -- learn (ApplyPatch quantifications expectation mb_condition conclusion) = do
 learn (ApplyPatch rule) = do
@@ -259,7 +274,7 @@ applyRule (G.HypothesisRule hyp conc) prop = do
 
 checkCondition :: forall m. MonadEffect m => G.ConcreteTerm -> FixpointT m Boolean
 checkCondition term = do
-  term' <- liftFixpointT $ runEvaluationT $ evaluate term
+  term' <- evaluateTerm term
   pure $ term' == G.trueTerm
 
 --------------------------------------------------------------------------------
@@ -280,5 +295,28 @@ isSubsumed (ConclusionPatch prop) = do
 
 -- | `prop1` subsumes `prop2` if `prop1 >= prop2`.
 subsumes :: forall m. MonadEffect m => G.ConcreteProposition -> G.ConcreteProposition -> FixpointT m Boolean
-subsumes prop1 prop2 = do
-  pure $ (prop1 ~? prop2) == Just GT
+subsumes prop1 prop2 = pure $ (prop1 ~? prop2) == Just GT
+
+--------------------------------------------------------------------------------
+-- Evaluation
+--------------------------------------------------------------------------------
+
+evaluateProposition :: forall m. MonadEffect m => G.ConcreteProposition -> FixpointT m G.ConcreteProposition
+evaluateProposition (G.Proposition rel a) = do
+  a' <- evaluateTerm a
+  pure $ G.Proposition rel a'
+
+evaluateTerm :: forall m. MonadEffect m => G.ConcreteTerm -> FixpointT m G.ConcreteTerm
+evaluateTerm (G.NamedTerm x _) = absurd x
+evaluateTerm (G.NeutralTerm funName args _) = do
+  moduleCtx <- lift getModuleCtx
+  let G.FunctionSpec funSpec = assertI just $ funName `Map.lookup` (unwrap moduleCtx.module_).functionSpecs
+  case funSpec.implementation of
+    Nothing -> bug $ "[evaluateTerm]: function has no internal implementation: " <> ticks (pretty funName)
+    Just impl -> do
+      args' <- evaluateTerm `traverse` args
+      let term' = impl args'
+      evaluateTerm term'
+evaluateTerm (G.PrimitiveTerm prim args ty) = do
+  args' <- evaluateTerm `traverse` args
+  pure $ G.PrimitiveTerm prim args' ty

@@ -16,6 +16,7 @@ import Data.Either (Either(..))
 import Data.Foldable (for_)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
+import Data.String as String
 import Data.Tuple (uncurry)
 import Hole (hole)
 import Language.Fixlat.Core.ModuleT (ModuleT)
@@ -43,7 +44,7 @@ runUnifyT ctx m = runStateT (runExceptT (runReaderT m ctx)) Map.empty >>= case _
   Left err /\ sigma -> pure $ Left $ 
     "Unification error: " <> err <> "\n\n" <>
     "Current substitution:" <>
-    Array.intercalate "\n" 
+    String.joinWith "\n"
       (Map.toUnfoldable sigma <#> 
         \(name /\ term) -> "\n  • " <> show name <> " := " <> show term)
   Right a /\ sigma -> pure $ Right $ a /\ sigma

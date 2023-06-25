@@ -10,18 +10,21 @@ import Control.Assert (Assertion, assert)
 import Control.Assert.Assertions (equal, exactLength)
 import Control.Assert.Refined (class Refined)
 import Control.Bug (bug)
-import Data.AlternatingList (AlternatingList)
+import Data.Array as Array
 import Data.Bifunctor (class Bifunctor, bimap, lmap, rmap)
 import Data.Either (Either(..))
 import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
 import Data.Lattice (class PartialOrd, comparePartial)
-import Data.List (List)
+import Data.List (List(..), (:))
+import Data.List as List
+import Data.Make (class Make)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
 import Data.Ord.Generic (genericCompare)
 import Data.Set (Set)
+import Data.Set as Set
 import Data.Show.Generic (genericShow)
 import Data.Traversable (traverse)
 import Hole (hole)
@@ -122,7 +125,6 @@ instance Show TupleOrdering where show x = genericShow x
 derive instance Eq TupleOrdering
 derive instance Ord TupleOrdering
 
-
 --------------------------------------------------------------------------------
 -- Term
 --------------------------------------------------------------------------------
@@ -132,7 +134,7 @@ type SymbolicTerm = LatticeTerm TermName
 type ConcreteTerm = LatticeTerm Void
 type LatticeTerm = Term LatticeType
 data Term ty x
-  = NeutralTerm FunctionName (Term ty x) ty
+  = NeutralTerm FunctionName (Array (Term ty x)) ty
   | PrimitiveTerm Primitive (Array (Term ty x)) ty
   | NamedTerm x ty
 
@@ -175,12 +177,12 @@ instance PartialOrd ConcreteTerm where
           (TruePrimitive /\ []) /\ (FalsePrimitive /\ []) -> Just GT
           (TruePrimitive /\ []) /\ (TruePrimitive /\ []) -> Just EQ
         IntLatticeType -> case (p1 /\ args1) /\ (p2 /\ args2) of
-          (ZeroPrimitive /\ []) /\ (ZeroPrimitive /\ []) -> Just EQ
-          (ZeroPrimitive /\ []) /\ (SucPrimitive /\ []) -> Just LT
-          (SucPrimitive /\ []) /\ (ZeroPrimitive /\ []) -> Just GT
-          (SucPrimitive /\ [x1]) /\ (SucPrimitive /\ [x2]) -> comparePartial x1 x2
-        NatLatticeType -> case (p1 /\ args1) /\ (p2 /\ args2) of
           (IntPrimitive x1 /\ []) /\ (IntPrimitive x2 /\ []) -> Just (compare x1 x2)
+        NatLatticeType -> case (p1 /\ args1) /\ (p2 /\ args2) of
+          (ZeroPrimitive /\ []) /\ (ZeroPrimitive /\ []) -> Just EQ
+          (ZeroPrimitive /\ []) /\ (SucPrimitive /\ [_]) -> Just LT
+          (SucPrimitive /\ [_]) /\ (ZeroPrimitive /\ []) -> Just GT
+          (SucPrimitive /\ [x1]) /\ (SucPrimitive /\ [x2]) -> comparePartial x1 x2
 
 typeOfTerm :: forall ty x. Term ty x -> ty
 typeOfTerm (NeutralTerm _ _ ty) = ty
@@ -210,7 +212,7 @@ instance Pretty Primitive where
     IntPrimitive x -> pretty x
 
 substituteTerm :: Map.Map TermName SymbolicTerm -> SymbolicTerm -> SymbolicTerm
-substituteTerm sigma (NeutralTerm fun tm ty) = NeutralTerm fun (substituteTerm sigma tm) ty
+substituteTerm sigma (NeutralTerm fun tms ty) = NeutralTerm fun (substituteTerm sigma <$> tms) ty
 substituteTerm sigma (PrimitiveTerm prim tms ty) = PrimitiveTerm prim (substituteTerm sigma <$> tms) ty
 substituteTerm sigma (NamedTerm x ty) = case Map.lookup x sigma of
   Just tm -> tm
@@ -224,7 +226,7 @@ concreteTerm =
 
 checkConcreteTerm :: SymbolicTerm -> Either String ConcreteTerm
 checkConcreteTerm = case _ of
-  NeutralTerm fun tm ty -> NeutralTerm fun <$> checkConcreteTerm tm <*> pure ty
+  NeutralTerm fun tms ty -> NeutralTerm fun <$> checkConcreteTerm `traverse` tms <*> pure ty
   PrimitiveTerm prim tms ty -> PrimitiveTerm prim <$> traverse checkConcreteTerm tms <*> pure ty
   term@(NamedTerm _ _) -> Left $ "Term " <> ticks (show term) <> " is not concrete."
 
@@ -242,9 +244,13 @@ falseTerm = PrimitiveTerm FalsePrimitive [] BoolLatticeType
 --------------------------------------------------------------------------------
 
 -- TODO: any other metadata that a function needs?
-data FunctionSpec = FunctionSpec FunctionType
+data FunctionSpec = FunctionSpec
+  { functionType :: FunctionType
+  , implementation :: Maybe (Array ConcreteTerm -> ConcreteTerm)
+  }
 
-instance Pretty FunctionSpec where pretty (FunctionSpec funTy) = "function:" <+> pretty funTy
+instance Pretty FunctionSpec where 
+  pretty (FunctionSpec funSpec) = "function:" <+> pretty funSpec.functionType
 
 -- | A FunctionType, which can either be a data function (lattice-polymorphic)
 -- | or a lattice function (lattice-specific). Each use of a Function must be
@@ -342,12 +348,12 @@ instance Pretty Rule where
   pretty (HypothesisRule hyp conc) = lines
     [ "rule:"
     , indent $ lines
-        [ "hypothesis:" <+> (indent $ lines
-            [ "quantifications:" <+> indent (pretty hyp.quantifications)
-            , "proposition:" <+> indent (pretty hyp.proposition)
-            , "filter:" <+> indent (pretty hyp.filter)
+        [ "hypothesis:\n" <> (indent $ lines
+            [ "quantifications:" <+> pretty hyp.quantifications
+            , "proposition:" <+> pretty hyp.proposition
+            , "filter:" <+> pretty hyp.filter
             ])
-        , "conclusion:" <+> indent (pretty conc) ] ]
+        , "conclusion:" <+> pretty conc ] ]
 
 instance Refined "Rule" Rule where
   -- TODO: encode requirements
@@ -366,9 +372,9 @@ substituteRule sigma (HypothesisRule hyp conc) =
 -- | quantifications. Each group is a set since the ordering among universals or
 -- | existentials doesn't matter.
 newtype Quantifications = Quantifications
-  (AlternatingList 
-    (Set UniversalQuantification)
-    (Set ExistentialQuantification))
+  (List 
+    ( (Set UniversalQuantification) \/
+      (Set ExistentialQuantification) ))
 
 derive instance Newtype Quantifications _
 derive newtype instance Show Quantifications
@@ -393,6 +399,21 @@ derive instance Eq ExistentialQuantification
 derive instance Ord ExistentialQuantification
 
 instance Pretty ExistentialQuantification where pretty (ExistentialQuantification x ty) = "∃" <> pretty x <> ":" <+> pretty ty
+
+instance Make Quantifications (Array (Either UniversalQuantification ExistentialQuantification)) where
+  make = Array.uncons >>> case _ of
+    Nothing -> Quantifications Nil
+    Just {head: q, tail: qs} -> case q of
+      Left uq -> Quantifications (go (Left (Set.singleton uq)) qs)
+      Right eq -> Quantifications (go (Right (Set.singleton eq)) qs)
+    where
+    go :: (Set.Set UniversalQuantification \/ Set.Set ExistentialQuantification) -> Array (Either UniversalQuantification ExistentialQuantification) -> List (Set UniversalQuantification \/ Set ExistentialQuantification)
+    go qset = Array.uncons >>> case _ of
+      Nothing -> List.singleton qset
+      Just {head: q, tail: qs} -> case qset /\ q of
+        Left uqset /\ Left uq -> go (Left (Set.insert uq uqset)) qs
+        Right eqset /\ Right eq -> go (Right (Set.insert eq eqset)) qs
+        _ -> go (bimap Set.singleton Set.singleton q) qs <> List.singleton qset
 
 --------------------------------------------------------------------------------
 -- Database

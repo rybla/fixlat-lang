@@ -6,6 +6,7 @@ import Prelude
 import Control.Monad.Reader (runReaderT)
 import Data.AlternatingList (AlternatingList(..), (-:))
 import Data.Either (Either(..))
+import Data.Make (make)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype as Newtype
@@ -69,12 +70,10 @@ module_ = emptyModule # Newtype.over Module _
         Tuple _add_n_suc $
         HypothesisRule
           { -- forall (x y z : Nat)
-            quantifications: Quantifications $
-              Set.fromFoldable 
-                [ UniversalQuantification x nat
-                , UniversalQuantification y nat
-                , UniversalQuantification z nat ] -:
-                AlternatingNil 
+            quantifications: make
+                [ Left $ UniversalQuantification x nat
+                , Left $ UniversalQuantification y nat
+                , Left $ UniversalQuantification z nat ]
             -- x + y = z
           , proposition: add (tuple3 (namedNat x) (namedNat y) (namedNat z))
           , filter: Nothing } $

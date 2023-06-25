@@ -28,7 +28,7 @@ instance (Pretty a, Pretty b) => Pretty (Tuple a b) where pretty (Tuple a b) = p
 instance (Pretty a, Pretty b) => Pretty (Either a b) where 
   pretty (Left a) = pretty a
   pretty (Right b) = pretty b
-instance (Pretty k, Pretty v) => Pretty (Map k v) where pretty m = pretty ((Map.toUnfoldable m :: Array _) <#> \(Tuple k v) -> pretty k <> " := " <> pretty v)
+instance (Pretty k, Pretty v) => Pretty (Map k v) where pretty m = bullets ((Map.toUnfoldable m :: Array _) <#> \(Tuple k v) -> pretty k <> " :=\n" <> indent (pretty v))
 instance Pretty a => Pretty (Set a) where pretty s = pretty (Set.toUnfoldable s :: Array _)
 
 surround pre post str = pre <> str <> post
@@ -42,9 +42,12 @@ parens = surround "(" ")"
 
 lines = String.joinWith "\n"
 
-indent str = String.joinWith "\n" $ ("  " <> _) <$> String.split (String.Pattern "\n") str
+indent = indentN 1
+indentN i =
+  let ind = String.joinWith "" $ Array.replicate i "  " in
+  \str -> String.joinWith "\n" $ (ind <> _) <$> String.split (String.Pattern "\n") str
 
-bullets strs = String.joinWith "\n" $ ("  • " <> _) <$> strs
+bullets strs = "\n" <> (String.joinWith "\n" $ ("• " <> _) <$> strs)
 
 appendPlus str1 str2 = str1 <> " " <> str2
 
