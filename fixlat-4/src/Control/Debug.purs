@@ -8,14 +8,10 @@ import Effect.Unsafe (unsafePerformEffect)
 _DEBUG :: Boolean
 _DEBUG = true
 
+foreign import _debug :: forall a. String -> (Unit -> a) -> a
+
 debug :: forall a. String -> (Unit -> a) -> a
-debug = if not _DEBUG then \_ k -> k unit else \msg k ->
-  unsafePerformEffect do
-    Console.log ("[>] " <> msg)
-    pure (k unit)
+debug = if _DEBUG then _debug else \_ k -> k unit
 
 debugA :: forall f. Applicative f => String -> f Unit
-debugA = if not _DEBUG then \_ -> pure unit else \msg ->
-  unsafePerformEffect do
-    Console.log ("[>] " <> msg)
-    pure (pure unit)
+debugA = if _DEBUG then \msg -> _debug msg (\_ -> pure unit) else \_ -> pure unit

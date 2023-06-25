@@ -5,6 +5,7 @@ import Language.Fixlat.Core.Grammar
 import Prelude
 
 import Control.Bug (bug)
+import Control.Debug as Debug
 import Control.Monad.Reader (runReaderT)
 import Data.AlternatingList (AlternatingList(..), (-:))
 import Data.Either (Either(..))
@@ -48,6 +49,7 @@ _fn_add = Name "add" :: FunctionName
 fn_add x y = NeutralTerm _fn_add [x, y] IntLatticeType
 
 _fn_lt = Name "lt" :: FunctionName
+fn_lt x y = NeutralTerm _fn_lt [x, y] BoolLatticeType
 
 -- module
 
@@ -80,10 +82,10 @@ module_ = emptyModule # Newtype.over Module _
       ,
         let x = Name "x" :: TermName in
         Tuple _rel1_rule3 $
-          HypothesisRule 
+          HypothesisRule
             { quantifications: make [Left $ UniversalQuantification x rel1_domain]
             , proposition: rel1 (NamedTerm x rel1_domain)
-            , filter: Nothing } $ Right $
+            , filter: Just (fn_lt (NamedTerm x IntLatticeType) (lit_int 4)) } $ Right $
           rel1 (fn_add (NamedTerm x IntLatticeType) (lit_int 1))
       ]
   , databaseSpecs = Map.fromFoldable
@@ -101,6 +103,15 @@ module_ = emptyModule # Newtype.over Module _
           { functionType: FunctionType [IntDataType, IntDataType] IntDataType
           , implementation: Just case _ of
               [PrimitiveTerm (IntPrimitive x) [] lty, PrimitiveTerm (IntPrimitive y) [] _] -> PrimitiveTerm (IntPrimitive (x + y)) [] lty
+              _ -> bug "invalid arguments to add"
+          }
+      ,
+        Tuple _fn_lt $ FunctionSpec
+          { functionType: FunctionType [IntDataType, IntDataType] IntDataType
+          , implementation: Just case _ of
+              [PrimitiveTerm (IntPrimitive x) [] _, PrimitiveTerm (IntPrimitive y) [] _] -> 
+                Debug.debug ("fn_lt.implemenation(" <> show x <> ", " <> show y <> ")") \_ -> 
+                PrimitiveTerm (BoolPrimitive (x < y)) [] BoolLatticeType
               _ -> bug "invalid arguments to add"
           }
       ]

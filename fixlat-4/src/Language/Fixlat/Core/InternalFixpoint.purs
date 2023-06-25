@@ -38,8 +38,8 @@ fixpoint :: forall m. MonadEffect m => Database -> G.DatabaseSpecName -> G.Fixpo
 fixpoint (Database props) databaseSpecName fixpointSpecName = do
   Debug.debugA "[fixpoint] start"
   moduleCtx <- getModuleCtx
-  let databaseSpec = assertI just $ databaseSpecName `Map.lookup` (unwrap moduleCtx.module_).databaseSpecs
-  let fixpointSpec = assertI just $ fixpointSpecName `Map.lookup` (unwrap databaseSpec).fixpoints
+  let databaseSpec = assertI keyOfMap $ databaseSpecName /\ (unwrap moduleCtx.module_).databaseSpecs
+  let fixpointSpec = assertI keyOfMap $ fixpointSpecName /\ (unwrap databaseSpec).fixpoints
 
   let axioms = (unwrap fixpointSpec).axiomNames <#> \axiomName -> 
         assertI keyOfMap (axiomName /\ (unwrap moduleCtx.module_).axioms)
@@ -275,7 +275,8 @@ applyRule (G.HypothesisRule hyp conc) prop = do
 checkCondition :: forall m. MonadEffect m => G.ConcreteTerm -> FixpointT m Boolean
 checkCondition term = do
   term' <- evaluateTerm term
-  pure $ term' == G.trueTerm
+  let success = term' == G.trueTerm
+  pure success
 
 --------------------------------------------------------------------------------
 -- Subsumption
@@ -310,7 +311,7 @@ evaluateTerm :: forall m. MonadEffect m => G.ConcreteTerm -> FixpointT m G.Concr
 evaluateTerm (G.NamedTerm x _) = absurd x
 evaluateTerm (G.NeutralTerm funName args _) = do
   moduleCtx <- lift getModuleCtx
-  let G.FunctionSpec funSpec = assertI just $ funName `Map.lookup` (unwrap moduleCtx.module_).functionSpecs
+  let G.FunctionSpec funSpec = assertI keyOfMap $ funName /\ (unwrap moduleCtx.module_).functionSpecs
   case funSpec.implementation of
     Nothing -> bug $ "[evaluateTerm]: function has no internal implementation: " <> ticks (pretty funName)
     Just impl -> do

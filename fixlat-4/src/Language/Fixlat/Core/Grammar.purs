@@ -172,10 +172,10 @@ instance PartialOrd ConcreteTerm where
             Just EQ -> comparePartial y1 y2
             mc -> mc
         BoolLatticeType -> case (p1 /\ args1) /\ (p2 /\ args2) of
-          (FalsePrimitive /\ []) /\ (FalsePrimitive /\ []) -> Just EQ
-          (FalsePrimitive /\ []) /\ (TruePrimitive /\ []) -> Just LT
-          (TruePrimitive /\ []) /\ (FalsePrimitive /\ []) -> Just GT
-          (TruePrimitive /\ []) /\ (TruePrimitive /\ []) -> Just EQ
+          (BoolPrimitive false /\ []) /\ (BoolPrimitive false /\ []) -> Just EQ
+          (BoolPrimitive false /\ []) /\ (BoolPrimitive true /\ []) -> Just LT
+          (BoolPrimitive true /\ []) /\ (BoolPrimitive false /\ []) -> Just GT
+          (BoolPrimitive true /\ []) /\ (BoolPrimitive true /\ []) -> Just EQ
         IntLatticeType -> case (p1 /\ args1) /\ (p2 /\ args2) of
           (IntPrimitive x1 /\ []) /\ (IntPrimitive x2 /\ []) -> Just (compare x1 x2)
         NatLatticeType -> case (p1 /\ args1) /\ (p2 /\ args2) of
@@ -192,10 +192,9 @@ typeOfTerm (NamedTerm _ ty) = ty
 data Primitive 
   = ZeroPrimitive
   | SucPrimitive
-  | TruePrimitive
-  | FalsePrimitive
   | TuplePrimitive
   | IntPrimitive Int
+  | BoolPrimitive Boolean
 
 derive instance Generic Primitive _
 instance Show Primitive where show x = genericShow x
@@ -206,10 +205,9 @@ instance Pretty Primitive where
   pretty = case _ of
     ZeroPrimitive -> "zero"
     SucPrimitive -> "suc"
-    TruePrimitive -> "true"
-    FalsePrimitive -> "false"
     TuplePrimitive -> "tuple"
     IntPrimitive x -> pretty x
+    BoolPrimitive x -> pretty x
 
 substituteTerm :: Map.Map TermName SymbolicTerm -> SymbolicTerm -> SymbolicTerm
 substituteTerm sigma (NeutralTerm fun tms ty) = NeutralTerm fun (substituteTerm sigma <$> tms) ty
@@ -234,20 +232,26 @@ toSymbolicTerm :: forall ty. Term ty Void -> Term ty TermName
 toSymbolicTerm = rmap absurd
 
 trueTerm :: forall x. Term LatticeType x
-trueTerm = PrimitiveTerm TruePrimitive [] BoolLatticeType
+trueTerm = PrimitiveTerm (BoolPrimitive true) [] BoolLatticeType
 
 falseTerm :: forall x. Term LatticeType x
-falseTerm = PrimitiveTerm FalsePrimitive [] BoolLatticeType
+falseTerm = PrimitiveTerm (BoolPrimitive false) [] BoolLatticeType
 
 --------------------------------------------------------------------------------
 -- Function
 --------------------------------------------------------------------------------
 
 -- TODO: any other metadata that a function needs?
-data FunctionSpec = FunctionSpec
+newtype FunctionSpec = FunctionSpec
   { functionType :: FunctionType
   , implementation :: Maybe (Array ConcreteTerm -> ConcreteTerm)
   }
+
+derive instance Newtype FunctionSpec _
+instance Show FunctionSpec where
+  show (FunctionSpec funSpec) = "FunctionSpec {" <> "functionType: " <> show funSpec.functionType <> ", implementation: " <> case funSpec.implementation of
+    Nothing -> "Nothing" <> "}"
+    Just _ -> "Just <lambda :: Array ConcreteTerm -> ConcreteTerm>" <> "}"
 
 instance Pretty FunctionSpec where 
   pretty (FunctionSpec funSpec) = "function:" <+> pretty funSpec.functionType
@@ -256,6 +260,9 @@ instance Pretty FunctionSpec where
 -- | or a lattice function (lattice-specific). Each use of a Function must be
 -- | monotonic.
 data FunctionType = FunctionType (Array DataType) DataType
+
+derive instance Generic FunctionType _
+instance Show FunctionType where show x = genericShow x
 
 instance Pretty FunctionType where pretty (FunctionType args ret) = parens (pretty args) <+> "->" <+> pretty ret
 
@@ -426,6 +433,7 @@ newtype DatabaseSpec = DatabaseSpec
   }
 
 derive instance Newtype DatabaseSpec _
+derive newtype instance Show DatabaseSpec
 
 instance Pretty DatabaseSpec where
   pretty (DatabaseSpec database) = lines
@@ -450,6 +458,7 @@ newtype FixpointSpec = FixpointSpec
   }
 
 derive instance Newtype FixpointSpec _
+derive newtype instance Show FixpointSpec
 
 instance Pretty FixpointSpec where
   pretty (FixpointSpec fixpoint) = lines
@@ -462,6 +471,9 @@ instance Pretty FixpointSpec where
 -- | into the DatabaseSpec.
 data InsertionSpec = InsertionSpec RelationName
 
+derive instance Generic InsertionSpec _
+instance Show InsertionSpec where show x = genericShow x
+
 instance Pretty InsertionSpec where
   pretty (InsertionSpec rel) = "insertion" <+> pretty rel
 
@@ -470,6 +482,9 @@ instance Pretty InsertionSpec where
 -- | which corresponds to QuerySpec that assumes the Rule's premises and looks
 -- | for a the lattice-maximal derivation of the conclusion.
 data QuerySpec = QuerySpec Rule
+
+derive instance Generic QuerySpec _
+instance Show QuerySpec where show x = genericShow x
 
 instance Pretty QuerySpec where
   pretty (QuerySpec rule) = "query" <+> pretty rule
