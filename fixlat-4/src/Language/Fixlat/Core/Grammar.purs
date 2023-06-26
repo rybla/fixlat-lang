@@ -370,14 +370,17 @@ instance Pretty Rule where
   --           ]))
   --       , "conclusion:\n" <> indent (pretty conc) ] ]
   pretty (HypothesisRule hyp conc) = 
-    pretty hyp.quantifications <> ". " <>
+    "│ " <>
+    (case hyp.quantifications of
+      Quantifications Nil -> ""
+      qs -> pretty qs <> ". ") <>
     pretty hyp.proposition <>
     maybe "" (\cond -> " such that " <> pretty cond) hyp.filter <> "\n" <>
     case conc of
       Left rule -> pretty rule
       Right prop ->
-        "––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––" <> "\n" <>
-        pretty prop
+        "├────────────────────────────────────────────────────────────────" <> "\n" <>
+        "│ " <> pretty prop
 
 instance Refined "Rule" Rule where
   -- TODO: encode requirements

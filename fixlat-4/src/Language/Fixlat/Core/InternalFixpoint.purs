@@ -31,7 +31,7 @@ import Language.Fixlat.Core.Unification (unify)
 import Text.Pretty (class Pretty, bullets, indent, pretty, ticks, (<+>))
 import Type.Proxy (Proxy(..))
 
-_INITIAL_GAS = 10
+_INITIAL_GAS = 20
 
 -- | Internal fixpoint implementation.
 fixpoint :: forall m. MonadEffect m => Database -> G.DatabaseSpecName -> G.FixpointSpecName -> ModuleT m Database

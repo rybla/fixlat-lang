@@ -4,9 +4,11 @@ import Data.Tuple
 import Data.Tuple.Nested
 import Language.Fixlat.Core.Grammar
 import Prelude hiding (add)
+
 import Control.Bug (bug)
 import Control.Monad.Reader (runReaderT)
 import Data.AlternatingList (AlternatingList(..), (-:), (:-))
+import Data.Array as Array
 import Data.Either (Either(..))
 import Data.Make (make)
 import Data.Map as Map
@@ -43,14 +45,14 @@ var_weight x = NamedTerm x weight
 -- distance
 
 _distance = Name "distance" :: RelationName
-distance_type ∷ LatticeType
-distance_type = (node `lex` node) `lex` weight
+db1_distance_type ∷ LatticeType
+db1_distance_type = (node `lex` node) `lex` weight
 distance ∷ forall x. Term LatticeType x → Term LatticeType x → Term LatticeType x → Proposition LatticeType x
 distance n1 n2 w = Proposition _distance $
   PrimitiveTerm TuplePrimitive 
     [ PrimitiveTerm TuplePrimitive [n1, n2] (node `lex` node)
     , w ] 
-    distance_type
+    db1_distance_type
 
 -- TODO: enable this once i get it working with just distance
 -- -- step
@@ -71,19 +73,22 @@ _add = Name "add" :: FunctionName
 add x y ty = NeutralTerm _add [x, y] ty
 add_weight x y = add x y weight
 
--- db1
+-- db
 
-_db1 = Name "db1" :: DatabaseSpecName
-_db1_fix1 = Name "db1_fix1" :: FixpointSpecName
+_db = Name "db" :: DatabaseSpecName
+_db_fix = Name "db_fix" :: FixpointSpecName
 
--- axioms
-_distance1 = Name "distance1" :: AxiomName
-_distance2 = Name "distance2" :: AxiomName
-_distance3 = Name "distance3" :: AxiomName
-_distance4 = Name "distance4" :: AxiomName
+db_graph = Map.fromFoldable $
+  (\i (a /\ b /\ w) -> Tuple (Name ("graph1_axiom_" <> show i) :: AxiomName) $ Axiom $ distance (lit_node a) (lit_node b) (lit_weight w))
+  `Array.mapWithIndex`
+  [ 1 /\ 2 /\ 10
+  , 2 /\ 4 /\ 90
+  , 1 /\ 3 /\ 20
+  , 3 /\ 4 /\ 10
+  ]
 
 -- rules
-_distance_trans = Name "distance_trans" :: RuleName
+_distance_transitivity = Name "db1_distance_trans" :: RuleName
 
 -- module
 
@@ -112,14 +117,10 @@ module_ = Module
         Tuple _distance $ Relation $ (node `lex` node) `lex` weight
       ]
   , 
-    axioms: Map.fromFoldable
-      [
-        Tuple _distance1 $ Axiom $ distance (lit_node 0) (lit_node 1) (lit_weight 1)
-      , 
-        Tuple _distance3 $ Axiom $ distance (lit_node 1) (lit_node 2) (lit_weight 7)
-      , 
-        Tuple _distance2 $ Axiom $ distance (lit_node 1) (lit_node 2) (lit_weight 5)
-      ]
+    axioms:
+      Map.unions
+        [ db_graph 
+        ]
   , 
     rules: Map.fromFoldable
       [ 
@@ -134,7 +135,7 @@ module_ = Module
           v = Name "v" :: TermName
           w = Name "w" :: TermName
         in
-        Tuple _distance_trans $
+        Tuple _distance_transitivity $
           HypothesisRule 
             { quantifications: make (forAll [a /\ node, b /\ node, v /\ weight])
             , proposition: distance (var_node a) (var_node b) (var_weight v)
@@ -146,14 +147,11 @@ module_ = Module
           distance (var_node a) (var_node c) (add_weight (var_weight v) (var_weight w)) ]
   , 
     databaseSpecs: Map.fromFoldable
-      [ Tuple _db1 $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
+      [ Tuple _db $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
           { fixpoints = Map.fromFoldable
-              [ Tuple _db1_fix1 $ FixpointSpec 
-                  { 
-                    axiomNames: [_distance1, _distance2, _distance3]
-                  , 
-                    ruleNames: [_distance_trans]
-                  }
+              [ Tuple _db_fix $ FixpointSpec 
+                  { axiomNames: Array.fromFoldable (Map.keys db_graph)
+                  , ruleNames: [_distance_transitivity] }
               ]
           }
       ]
@@ -162,10 +160,12 @@ module_ = Module
 main :: Effect Unit
 main = do
   Console.log "[Dijkstra.main] Start"
-  let db = emptyDatabase
-  Console.log $ "[Dijkstra.main] Input database:\n" <> pretty db <> "\n"
-  let m = fixpoint db _db1 _db1_fix1
   let ctx = {module_}
-  db' <- runReaderT (runModuleT m) ctx
-  Console.log $ "[Dijkstra.main] Output database:\n" <> pretty db' <> "\n"
+
+  when true do
+    let db = emptyDatabase
+    Console.log $ "[Dijkstra.main] Input database:\n" <> pretty db <> "\n"
+    db' <- runReaderT (runModuleT (fixpoint db _db _db_fix)) ctx
+    Console.log $ "[Dijkstra.main] Output database:\n" <> pretty db' <> "\n"
+
   pure unit
