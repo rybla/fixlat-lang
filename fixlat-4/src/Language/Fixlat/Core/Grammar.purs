@@ -313,8 +313,10 @@ toSymbolicProposition :: forall ty. Proposition ty Void -> Proposition ty TermNa
 toSymbolicProposition = rmap absurd
 
 instance PartialOrd ConcreteProposition where
-  comparePartial (Proposition rel1 arg1) (Proposition rel2 arg2) = 
-    assert equal (rel1 /\ rel2) \_ -> comparePartial arg1 arg2
+  comparePartial (Proposition rel1 arg1) (Proposition rel2 arg2) =
+    if rel1 == rel2 
+      then comparePartial arg1 arg2
+      else Nothing
 
 --------------------------------------------------------------------------------
 -- Axiom

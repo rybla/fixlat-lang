@@ -34,38 +34,41 @@ lex = TupleLatticeType LexicographicTupleOrdering
 forAll = map (Left <<< uncurry UniversalQuantification)
 exists = map (Right <<< uncurry ExistentialQuantification)
 
-node = DiscreteLatticeType IntDataType
+node = DiscreteLatticeType IntDataType :: LatticeType
 lit_node x = PrimitiveTerm (IntPrimitive x) [] node
 var_node x = NamedTerm x node
 
-weight = OpLatticeType IntLatticeType
+weight = OpLatticeType IntLatticeType :: LatticeType
 lit_weight x = PrimitiveTerm (IntPrimitive x) [] weight
 var_weight x = NamedTerm x weight
 
 -- distance
 
 _distance = Name "distance" :: RelationName
-db1_distance_type ∷ LatticeType
-db1_distance_type = (node `lex` node) `lex` weight
-distance ∷ forall x. Term LatticeType x → Term LatticeType x → Term LatticeType x → Proposition LatticeType x
+
+distance_type :: LatticeType
+distance_type = (node `lex` node) `lex` weight
+
+distance :: forall x. Term LatticeType x → Term LatticeType x → Term LatticeType x → Proposition LatticeType x
 distance n1 n2 w = Proposition _distance $
   PrimitiveTerm TuplePrimitive 
     [ PrimitiveTerm TuplePrimitive [n1, n2] (node `lex` node)
     , w ] 
-    db1_distance_type
+    distance_type
 
--- TODO: enable this once i get it working with just distance
--- -- step
+-- step
 
--- -- _step = Name "step" :: RelationName
--- -- step_type ∷ LatticeType
--- -- step_type = (node `lex` node) `lex` weight
--- -- step ∷ forall x. Term LatticeType x → Term LatticeType x → Term LatticeType x → Proposition LatticeType x
--- -- step n1 n2 w = Proposition _step $ 
--- --   PrimitiveTerm TuplePrimitive 
--- --     [ PrimitiveTerm TuplePrimitive [n1, n2] (node `lex` node)
--- --     , w ] 
--- --     weight
+_step = Name "step" :: RelationName
+
+step_type :: LatticeType
+step_type = (node `lex` node) `lex` weight
+
+step :: forall x. Term LatticeType x → Term LatticeType x → Term LatticeType x → Proposition LatticeType x
+step n1 n2 w = Proposition _step $
+  PrimitiveTerm TuplePrimitive 
+    [ PrimitiveTerm TuplePrimitive [n1, n2] (node `lex` node)
+    , w ]
+    step_type
 
 -- add
 
@@ -76,10 +79,12 @@ add_weight x y = add x y weight
 -- db
 
 _db = Name "db" :: DatabaseSpecName
-_db_fix = Name "db_fix" :: FixpointSpecName
+_db_fix1 = Name "db_fix1" :: FixpointSpecName
+_db_fix2 = Name "db_fix2" :: FixpointSpecName
 
-db_graph = Map.fromFoldable $
-  (\i (a /\ b /\ w) -> Tuple (Name ("graph1_axiom_" <> show i) :: AxiomName) $ Axiom $ distance (lit_node a) (lit_node b) (lit_weight w))
+db_graph1 :: Map.Map AxiomName Axiom
+db_graph1 = Map.fromFoldable $
+  (\i (a /\ b /\ w) -> Tuple (Name ("graph1_axiom_distance_" <> show i) :: AxiomName) $ Axiom $ distance (lit_node a) (lit_node b) (lit_weight w))
   `Array.mapWithIndex`
   [ 1 /\ 2 /\ 10
   , 2 /\ 4 /\ 90
@@ -87,12 +92,28 @@ db_graph = Map.fromFoldable $
   , 3 /\ 4 /\ 10
   ]
 
+db_graph2 :: Map.Map AxiomName Axiom
+db_graph2 = Map.fromFoldable $ Array.concat
+  [ [ Name "graph1_axiom_distance_start" /\ 
+        Axiom (distance (lit_node 1) (lit_node 1) (lit_weight 0)) 
+    ]
+  , Array.mapWithIndex
+      (\i (a /\ b /\ w) -> Tuple (Name ("graph2_axiom_step_" <> show i)) $ 
+        Axiom $ step (lit_node a) (lit_node b) (lit_weight w))
+      [ 1 /\ 2 /\ 10
+      , 2 /\ 4 /\ 90
+      , 1 /\ 3 /\ 20
+      , 3 /\ 4 /\ 30
+    ] 
+  ]
+
 -- rules
-_distance_transitivity = Name "db1_distance_trans" :: RuleName
+_distance_transitivity = Name "distance_transitivity" :: RuleName
+_distance_step = Name "distance_step" :: RuleName
 
 -- module
 
-module_ ∷ Module
+module_ :: Module
 module_ = Module 
   { 
     dataTypes: Map.empty
@@ -119,7 +140,8 @@ module_ = Module
   , 
     axioms:
       Map.unions
-        [ db_graph 
+        [ db_graph1 
+        , db_graph2
         ]
   , 
     rules: Map.fromFoldable
@@ -144,14 +166,40 @@ module_ = Module
             { quantifications: make (forAll [c /\ node, w /\ weight])
             , proposition: distance (var_node b) (var_node c) (var_weight w)
             , filter: Nothing } $ Right $
-          distance (var_node a) (var_node c) (add_weight (var_weight v) (var_weight w)) ]
+          distance (var_node a) (var_node c) (add_weight (var_weight v) (var_weight w)) 
+      , 
+        -- distance (a, b, v)
+        -- step (b, c, w)
+        -- -------------------------
+        -- distance (a, c, v + w)
+        let
+          a = Name "a" :: TermName
+          b = Name "b" :: TermName
+          c = Name "c" :: TermName
+          v = Name "v" :: TermName
+          w = Name "w" :: TermName
+        in
+        Tuple _distance_step $
+          HypothesisRule 
+            { quantifications: make (forAll [a /\ node, b /\ node, v /\ weight])
+            , proposition: distance (var_node a) (var_node b) (var_weight v)
+            , filter: Nothing } $ Left $
+          HypothesisRule 
+            { quantifications: make (forAll [c /\ node, w /\ weight])
+            , proposition: step (var_node b) (var_node c) (var_weight w)
+            , filter: Nothing } $ Right $
+          distance (var_node a) (var_node c) (add_weight (var_weight v) (var_weight w)) 
+      ]
   , 
     databaseSpecs: Map.fromFoldable
       [ Tuple _db $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
           { fixpoints = Map.fromFoldable
-              [ Tuple _db_fix $ FixpointSpec 
-                  { axiomNames: Array.fromFoldable (Map.keys db_graph)
+              [ Tuple _db_fix1 $ FixpointSpec 
+                  { axiomNames: Array.fromFoldable (Map.keys db_graph1)
                   , ruleNames: [_distance_transitivity] }
+              , Tuple _db_fix2 $ FixpointSpec 
+                  { axiomNames: Array.fromFoldable (Map.keys db_graph2)
+                  , ruleNames: [_distance_step] }
               ]
           }
       ]
@@ -165,7 +213,8 @@ main = do
   when true do
     let db = emptyDatabase
     Console.log $ "[Dijkstra.main] Input database:\n" <> pretty db <> "\n"
-    db' <- runReaderT (runModuleT (fixpoint db _db _db_fix)) ctx
+    -- db' <- runReaderT (runModuleT (fixpoint db _db _db_fix1)) ctx
+    db' <- runReaderT (runModuleT (fixpoint db _db _db_fix2)) ctx
     Console.log $ "[Dijkstra.main] Output database:\n" <> pretty db' <> "\n"
 
   pure unit

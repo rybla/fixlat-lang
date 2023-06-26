@@ -31,7 +31,7 @@ import Language.Fixlat.Core.Unification (unify)
 import Text.Pretty (class Pretty, bullets, indent, pretty, ticks, (<+>))
 import Type.Proxy (Proxy(..))
 
-_INITIAL_GAS = 20
+_INITIAL_GAS = 1000
 
 -- | Internal fixpoint implementation.
 fixpoint :: forall m. MonadEffect m => Database -> G.DatabaseSpecName -> G.FixpointSpecName -> ModuleT m Database
@@ -51,7 +51,8 @@ fixpoint (Database props) databaseSpecName fixpointSpecName = do
   Debug.debugA $ "[fixpoint] initial queue:" <> pretty queue
 
   let env = 
-        { gas: _INITIAL_GAS
+        { initial_gas: _INITIAL_GAS
+        , gas: _INITIAL_GAS
         , database: Database []
         , rules: Map.filterWithKey 
             (\ruleName _ -> ruleName `Array.elem` (unwrap fixpointSpec).ruleNames)
@@ -66,6 +67,7 @@ fixpoint (Database props) databaseSpecName fixpointSpecName = do
   env' <- execStateT loop env
 
   Debug.debugA "[fixpoint] end"
+  Debug.debugA $ "[fixpoint] gas used: " <> show (env'.initial_gas - env'.gas)
   pure env'.database
 
 --------------------------------------------------------------------------------
@@ -78,7 +80,8 @@ liftFixpointT :: forall m a. MonadEffect m => ModuleT m a -> FixpointT m a
 liftFixpointT = lift
 
 type FixpointEnv =
-  { gas :: Int
+  { initial_gas :: Int
+  , gas :: Int
   , database :: Database
   , rules :: Map.Map G.RuleName G.Rule
   , queue :: Queue
