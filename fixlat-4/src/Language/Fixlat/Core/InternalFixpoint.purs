@@ -296,7 +296,11 @@ isSubsumed (ConclusionPatch prop) = do
 
 -- | `prop1` subsumes `prop2` if `prop1 >= prop2`.
 subsumes :: forall m. MonadEffect m => G.ConcreteProposition -> G.ConcreteProposition -> FixpointT m Boolean
-subsumes prop1 prop2 = pure $ (prop1 ~? prop2) == Just GT
+subsumes prop1 prop2 = do
+  -- let result = (prop1 ~? prop2) == Just GT
+  -- Debug.debugA $ "[subsumes] " <> pretty prop1 <> "  >=?  " <> pretty prop2 <> "  ==>  " <> pretty result
+  -- pure result
+  pure $ (prop1 ~? prop2) == Just GT
 
 --------------------------------------------------------------------------------
 -- Evaluation

@@ -116,9 +116,9 @@ module_ = Module
       [
         Tuple _distance1 $ Axiom $ distance (lit_node 0) (lit_node 1) (lit_weight 1)
       , 
-        Tuple _distance2 $ Axiom $ distance (lit_node 1) (lit_node 2) (lit_weight 2)
+        Tuple _distance3 $ Axiom $ distance (lit_node 1) (lit_node 2) (lit_weight 7)
       , 
-        Tuple _distance2 $ Axiom $ distance (lit_node 1) (lit_node 2) (lit_weight 1)
+        Tuple _distance2 $ Axiom $ distance (lit_node 1) (lit_node 2) (lit_weight 5)
       ]
   , 
     rules: Map.fromFoldable
@@ -149,8 +149,11 @@ module_ = Module
       [ Tuple _db1 $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
           { fixpoints = Map.fromFoldable
               [ Tuple _db1_fix1 $ FixpointSpec 
-                  { axiomNames: [_distance1, _distance2]
-                  , ruleNames: [_distance_trans] }
+                  { 
+                    axiomNames: [_distance1, _distance2, _distance3]
+                  , 
+                    ruleNames: [_distance_trans]
+                  }
               ]
           }
       ]
