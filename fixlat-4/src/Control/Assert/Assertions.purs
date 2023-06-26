@@ -20,10 +20,10 @@ just =
       Just a -> pure a
   }
 
-equal :: forall a. Show a => Eq a => Assertion (a /\ a) Unit
+equal :: forall a. Show a => Eq a => Assertion (a /\ a) a
 equal =
   { label: "equal"
-  , check: \(a /\ a') -> if a == a' then pure unit else 
+  , check: \(a /\ a') -> if a == a' then pure a else 
       throwError $ 
         "Given values are not equal:\n" <>
         "- " <> show a <> "\n" <>

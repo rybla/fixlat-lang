@@ -9,7 +9,7 @@ import Control.Assert (assert)
 import Control.Assert.Assertions (equal)
 import Control.Bug (bug)
 import Control.Monad.Except (ExceptT, lift, runExceptT, throwError)
-import Control.Monad.Reader (ReaderT, runReaderT)
+import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.State (StateT, get, modify_, runStateT)
 import Data.Array as Array
 import Data.Either (Either(..))
@@ -17,10 +17,10 @@ import Data.Foldable (for_)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.String as String
-import Data.Tuple (uncurry)
+import Data.Tuple (snd, uncurry)
 import Hole (hole)
 import Language.Fixlat.Core.ModuleT (ModuleT)
-import Text.Pretty (ticks)
+import Text.Pretty (pretty, ticks)
 
 --------------------------------------------------------------------------------
 -- UnifyT
@@ -35,9 +35,16 @@ liftUnifyT = lift >>> lift >>> lift
 -- universal and existential quantifiers matters. Not exactly sure what data
 -- structure to use
 type Ctx = 
-  { quantifications :: Quantifications }
+  { initial :: (SymbolicProposition /\ ConcreteProposition) \/ (SymbolicTerm /\ ConcreteTerm)
+  , quantifications :: Quantifications }
 
 type Sub = Map.Map TermName ConcreteTerm
+
+unify :: forall m. Monad m => Quantifications -> (SymbolicProposition /\ ConcreteProposition) \/ (SymbolicTerm /\ ConcreteTerm) -> ModuleT m (String \/ Sub)
+unify quantifications initial = map snd <$> runUnifyT {quantifications, initial} do
+  case initial of
+    Left (expected /\ actual) -> unifyProposition expected actual
+    Right (expected /\ actual) -> unifyTerm expected actual
 
 runUnifyT :: forall m a. Monad m => Ctx -> UnifyT m a -> ModuleT m (String \/ (a /\ Sub))
 runUnifyT ctx m = runStateT (runExceptT (runReaderT m ctx)) Map.empty >>= case _ of
@@ -46,7 +53,7 @@ runUnifyT ctx m = runStateT (runExceptT (runReaderT m ctx)) Map.empty >>= case _
     "Current substitution:" <>
     String.joinWith "\n"
       (Map.toUnfoldable sigma <#> 
-        \(name /\ term) -> "\n  • " <> show name <> " := " <> show term)
+        \(name /\ term) -> "\n  • " <> pretty name <> " := " <> pretty term)
   Right a /\ sigma -> pure $ Right $ a /\ sigma
 
 --------------------------------------------------------------------------------
@@ -63,13 +70,17 @@ unifyProposition (Proposition rel1 arg1) (Proposition rel2 arg2)
 -- | Unify expectation (symbolic, as it couldbe satisfied with many candidates)
 -- | with candidate.
 unifyTerm :: forall m. Monad m => SymbolicTerm -> ConcreteTerm -> UnifyT m Unit
-unifyTerm term1 term2 | typeOfTerm term1 /= typeOfTerm term2 = bug $ "In order to unify a symbolic term with a concrete term, they must have the same type."
+unifyTerm term1 term2 | typeOfTerm term1 /= typeOfTerm term2 = do
+  env <- ask
+  bug $ "In order to unify a symbolic term with a concrete term, they must have the same type. But, got expected type " <> ticks (pretty (typeOfTerm term1)) <> " and actual type " <> ticks (pretty (typeOfTerm term2)) <> ".\nWhile unifying " <> case env.initial of
+    Left (expected /\ actual) -> ticks (pretty expected) <> " with " <> ticks (pretty actual)
+    Right (expected /\ actual) -> ticks (pretty expected) <> " with " <> ticks (pretty actual)
 unifyTerm _ (NeutralTerm _ _ _) = bug $ "In order to unify a symbolic term with a concrete term, the concrete term must be fully simplified."
 unifyTerm _ (NamedTerm x _) = absurd x
 unifyTerm (NamedTerm x1 _) term2 = addSubstitution x1 term2
 unifyTerm (PrimitiveTerm p1 args1 _) (PrimitiveTerm p2 args2 _) | p1 == p2 =
   for_ (args1 `Array.zip` args2) (uncurry unifyTerm)
-unifyTerm term1 term2 = throwError $ "Cannot unify " <> ticks (show term1) <> " with " <> ticks (show term2) <> "."
+unifyTerm term1 term2 = throwError $ "Cannot unify " <> ticks (pretty term1) <> " with " <> ticks (pretty term2) <> "."
 
 addSubstitution :: forall m. Monad m => TermName -> ConcreteTerm -> UnifyT m Unit
 addSubstitution name term = do

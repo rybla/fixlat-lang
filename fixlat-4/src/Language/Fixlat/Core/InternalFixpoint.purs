@@ -27,7 +27,7 @@ import Hole (hole)
 import Language.Fixlat.Core.Grammar (Axiom(..), Proposition)
 import Language.Fixlat.Core.Grammar as G
 import Language.Fixlat.Core.ModuleT (ModuleT, getModuleCtx)
-import Language.Fixlat.Core.Unification (runUnifyT, unifyProposition)
+import Language.Fixlat.Core.Unification (unify)
 import Text.Pretty (class Pretty, bullets, indent, pretty, ticks, (<+>))
 import Type.Proxy (Proxy(..))
 
@@ -123,7 +123,7 @@ loop = do
         -- no more patches; done
         pure unit
       Just patch -> do
-        Debug.debugA $ "[loop] patch:" <+> pretty patch
+        Debug.debugA $ "[loop] patch:\n" <> indent (pretty patch)
         -- learn patch, yielding new patches
         patches <- learn patch
         -- insert new patches into queue
@@ -246,12 +246,12 @@ applyRule :: forall m. MonadEffect m => G.Rule -> G.ConcreteProposition -> Fixpo
 applyRule (G.HypothesisRule hyp conc) prop = do
   -- TODO: unify hypothesis of rule with prop, and yield the patch that is the
   -- rest of the rule
-  let ctx = {quantifications: hyp.quantifications}
-  liftFixpointT (runUnifyT ctx (unifyProposition hyp.proposition prop)) >>= case _ of
+  -- liftFixpointT (runUnifyT ctx (unifyProposition hyp.proposition prop)) >>= case _ of
+  liftFixpointT (unify hyp.quantifications (Left (hyp.proposition /\ prop))) >>= case _ of
     Left _err -> do
       -- not unifiable, so ignore candidate
       pure []
-    Right (_ /\ _sigma) -> do
+    Right _sigma -> do
       let sigma = G.toSymbolicTerm <$> _sigma
       -- apply sigma to condition
       let filter' = hyp.filter <#> \condition -> assertI G.concreteTerm $ G.substituteTerm sigma condition

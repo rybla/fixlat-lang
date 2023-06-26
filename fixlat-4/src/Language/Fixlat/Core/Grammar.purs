@@ -20,7 +20,7 @@ import Data.List (List(..), (:))
 import Data.List as List
 import Data.Make (class Make)
 import Data.Map as Map
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (class Newtype)
 import Data.Ord.Generic (genericCompare)
 import Data.Set (Set)
@@ -29,7 +29,7 @@ import Data.Show.Generic (genericShow)
 import Data.Traversable (traverse)
 import Hole (hole)
 import Prim as Prim
-import Text.Pretty (class Pretty, indent, lines, parens, pretty, ticks, (<+>))
+import Text.Pretty (class Pretty, bullets, indent, lines, parens, pretty, ticks, (<+>))
 
 --------------------------------------------------------------------------------
 -- Module
@@ -91,7 +91,7 @@ instance Pretty DataType where
     BoolDataType -> "bool"
     IntDataType -> "int"
     NatDataType -> "nat"
-    TupleDataType ty1 ty2 -> "tuple" <+> parens (pretty ty1) <+> parens (pretty ty2)
+    TupleDataType ty1 ty2 -> "tuple" <> parens (pretty ty1 <> ", " <> pretty ty2)
 
 -- | A LatticeType specifies a lattice ordering over a uniquely deTermined
 -- | underlying DataType.
@@ -113,9 +113,9 @@ instance Pretty LatticeType where
     BoolLatticeType -> "bool"
     IntLatticeType -> "int"
     NatLatticeType -> "nat"
-    OpLatticeType lty -> "op" <+> parens (pretty lty)
-    DiscreteLatticeType ty -> "discrete" <+> parens (pretty ty)
-    TupleLatticeType LexicographicTupleOrdering lty1 lty2 -> "tuple" <+> parens (pretty lty1) <+> parens (pretty lty2)
+    OpLatticeType lty -> "op" <> parens (pretty lty)
+    DiscreteLatticeType ty -> "discrete" <> parens (pretty ty)
+    TupleLatticeType LexicographicTupleOrdering lty1 lty2 -> "tuple" <> parens (pretty lty1 <> ", " <> pretty lty2)
 
 data TupleOrdering
   = LexicographicTupleOrdering
@@ -162,27 +162,35 @@ instance PartialOrd ConcreteTerm where
   comparePartial _ (NamedTerm x _) = absurd x
 
   comparePartial (PrimitiveTerm p1 args1 _lty1) (PrimitiveTerm p2 args2 _lty2) =
-    assert equal (_lty1 /\ _lty2) \_ -> do
-      let lty = _lty1
-      case lty of
-        OpLatticeType lty' -> comparePartial (PrimitiveTerm p2 args2 lty') (PrimitiveTerm p1 args1 lty')
-        DiscreteLatticeType _ -> if (p1 /\ args1) == (p2 /\ args2) then Just EQ else Nothing
-        TupleLatticeType LexicographicTupleOrdering _ _ -> case (p1 /\ args1) /\ (p2 /\ args2) of
-          (TuplePrimitive /\ [x1, y1]) /\ (TuplePrimitive /\ [x2, y2]) -> case comparePartial x1 x2 of
-            Just EQ -> comparePartial y1 y2
-            mc -> mc
-        BoolLatticeType -> case (p1 /\ args1) /\ (p2 /\ args2) of
-          (BoolPrimitive false /\ []) /\ (BoolPrimitive false /\ []) -> Just EQ
-          (BoolPrimitive false /\ []) /\ (BoolPrimitive true /\ []) -> Just LT
-          (BoolPrimitive true /\ []) /\ (BoolPrimitive false /\ []) -> Just GT
-          (BoolPrimitive true /\ []) /\ (BoolPrimitive true /\ []) -> Just EQ
-        IntLatticeType -> case (p1 /\ args1) /\ (p2 /\ args2) of
-          (IntPrimitive x1 /\ []) /\ (IntPrimitive x2 /\ []) -> Just (compare x1 x2)
-        NatLatticeType -> case (p1 /\ args1) /\ (p2 /\ args2) of
-          (ZeroPrimitive /\ []) /\ (ZeroPrimitive /\ []) -> Just EQ
-          (ZeroPrimitive /\ []) /\ (SucPrimitive /\ [_]) -> Just LT
-          (SucPrimitive /\ [_]) /\ (ZeroPrimitive /\ []) -> Just GT
-          (SucPrimitive /\ [x1]) /\ (SucPrimitive /\ [x2]) -> comparePartial x1 x2
+    assert equal (_lty1 /\ _lty2) case _ of
+
+      OpLatticeType lty' -> comparePartial (PrimitiveTerm p2 args2 lty') (PrimitiveTerm p1 args1 lty')
+
+      DiscreteLatticeType _ -> if (p1 /\ args1) == (p2 /\ args2) then Just EQ else Nothing
+
+      TupleLatticeType LexicographicTupleOrdering _ _ 
+        | (TuplePrimitive /\ [x1, y1]) /\ (TuplePrimitive /\ [x2, y2]) <- (p1 /\ args1) /\ (p2 /\ args2) ->
+            case comparePartial x1 x2 of
+              Just EQ -> comparePartial y1 y2
+              mc -> mc
+
+      BoolLatticeType | (BoolPrimitive false /\ []) /\ (BoolPrimitive false /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
+      BoolLatticeType | (BoolPrimitive false /\ []) /\ (BoolPrimitive true /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just LT
+      BoolLatticeType | (BoolPrimitive true /\ []) /\ (BoolPrimitive false /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just GT
+      BoolLatticeType | (BoolPrimitive true /\ []) /\ (BoolPrimitive true /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
+      
+      IntLatticeType | (IntPrimitive x1 /\ []) /\ (IntPrimitive x2 /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just (compare x1 x2)
+      
+      NatLatticeType | (ZeroPrimitive /\ []) /\ (ZeroPrimitive /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
+      NatLatticeType | (ZeroPrimitive /\ []) /\ (SucPrimitive /\ [_]) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just LT
+      NatLatticeType | (SucPrimitive /\ [_]) /\ (ZeroPrimitive /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just GT
+      NatLatticeType | (SucPrimitive /\ [x1]) /\ (SucPrimitive /\ [x2]) <- (p1 /\ args1) /\ (p2 /\ args2) -> comparePartial x1 x2
+
+      lty -> bug $
+        "[comparePartial] Unexpected term form:\n" <> bullets
+          [ "lty = " <> ticks (show lty)
+          , "(p1 /\\ args2) = " <> ticks (pretty p1 <> parens (pretty args1))
+          , "(p2 /\\ args2) = " <> ticks (pretty p2 <> parens (pretty args2)) ]
 
 typeOfTerm :: forall ty x. Term ty x -> ty
 typeOfTerm (NeutralTerm _ _ ty) = ty
@@ -352,15 +360,24 @@ derive instance Generic Rule _
 instance Show Rule where show x = genericShow x
 
 instance Pretty Rule where 
-  pretty (HypothesisRule hyp conc) = lines
-    [ "rule:"
-    , indent $ lines
-        [ "hypothesis:\n" <> (indent $ lines
-            [ "quantifications:" <+> pretty hyp.quantifications
-            , "proposition:" <+> pretty hyp.proposition
-            , "filter:" <+> pretty hyp.filter
-            ])
-        , "conclusion:" <+> pretty conc ] ]
+  -- pretty (HypothesisRule hyp conc) = lines
+  --   [ "rule:"
+  --   , indent $ lines
+  --       [ "hypothesis:\n" <> (indent (lines
+  --           [ "quantifications:" <+> pretty hyp.quantifications
+  --           , "proposition:" <+> pretty hyp.proposition
+  --           , "filter:" <+> pretty hyp.filter
+  --           ]))
+  --       , "conclusion:\n" <> indent (pretty conc) ] ]
+  pretty (HypothesisRule hyp conc) = 
+    pretty hyp.quantifications <> ". " <>
+    pretty hyp.proposition <>
+    maybe "" (\cond -> " such that " <> pretty cond) hyp.filter <> "\n" <>
+    case conc of
+      Left rule -> pretty rule
+      Right prop ->
+        "––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––" <> "\n" <>
+        pretty prop
 
 instance Refined "Rule" Rule where
   -- TODO: encode requirements
@@ -396,7 +413,7 @@ instance Show UniversalQuantification where show x = genericShow x
 derive instance Eq UniversalQuantification
 derive instance Ord UniversalQuantification
 
-instance Pretty UniversalQuantification where pretty (UniversalQuantification x ty) = "∀" <> pretty x <> ":" <+> pretty ty
+instance Pretty UniversalQuantification where pretty (UniversalQuantification x ty) = "∀" <> parens (pretty x <> ":" <+> pretty ty)
 
 data ExistentialQuantification = ExistentialQuantification TermName LatticeType
 
@@ -405,7 +422,7 @@ instance Show ExistentialQuantification where show x = genericShow x
 derive instance Eq ExistentialQuantification
 derive instance Ord ExistentialQuantification
 
-instance Pretty ExistentialQuantification where pretty (ExistentialQuantification x ty) = "∃" <> pretty x <> ":" <+> pretty ty
+instance Pretty ExistentialQuantification where pretty (ExistentialQuantification x ty) = "∃" <> parens (pretty x <> ":" <+> pretty ty)
 
 instance Make Quantifications (Array (Either UniversalQuantification ExistentialQuantification)) where
   make = Array.uncons >>> case _ of
