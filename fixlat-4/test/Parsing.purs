@@ -163,9 +163,9 @@ main = do
       , initial_gas: 100 }
 
   let db = emptyDatabase
-  Console.log $ "[Parsing.main] Input database:\n" <> pretty db <> "\n"
+  Console.log $ "[Parsing.main] Input database:" <> pretty db <> "\n"
   db' <- runReaderT (runModuleT (fixpoint db _db _db_fix)) ctx
-  Console.log $ "[Parsing.main] Output database:\n" <> pretty db' <> "\n"
+  Console.log $ "[Parsing.main] Output database:" <> pretty db' <> "\n"
 
   pure unit
 

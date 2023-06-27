@@ -28,7 +28,7 @@ import Language.Fixlat.Core.Grammar (Axiom(..), Proposition)
 import Language.Fixlat.Core.Grammar as G
 import Language.Fixlat.Core.ModuleT (ModuleT, getModuleCtx)
 import Language.Fixlat.Core.Unification (unify)
-import Text.Pretty (class Pretty, bullets, indent, pretty, ticks, (<+>))
+import Text.Pretty (class Pretty, bullets, indent, pretty, ticks, (<+>), (<\>))
 import Type.Proxy (Proxy(..))
 
 -- | Internal fixpoint implementation.
@@ -99,8 +99,8 @@ derive instance Generic Patch _
 instance Show Patch where show x = genericShow x
 
 instance Pretty Patch where
-  pretty (ApplyPatch rule) = pretty rule
-  pretty (ConclusionPatch prop) = pretty prop
+  pretty (ApplyPatch rule) = "apply:" <\> indent (pretty rule)
+  pretty (ConclusionPatch prop) = "conclude: " <> pretty prop
 
 substitutePatch :: Map.Map G.TermName G.SymbolicTerm -> Patch -> Patch
 substitutePatch sigma (ConclusionPatch prop) = ConclusionPatch (assertI G.concreteProposition (G.substituteProposition sigma (G.toSymbolicProposition prop)))
@@ -115,8 +115,8 @@ loop = do
   -- db <- gets _.database
   -- Debug.debugA $ "[fixpoint] database:" <> pretty db
 
-  -- queue <- gets _.queue
-  -- Debug.debugA $ "[fixpoint] queue:" <> pretty queue
+  queue <- gets _.queue
+  Debug.debugA $ "[fixpoint] queue:" <> indent (pretty queue)
 
   gas <- _.gas <$> modify \env -> env {gas = env.gas - 1}
   if gas <= 0 then bug "[loop] out of gas" else do
@@ -125,9 +125,10 @@ loop = do
         -- no more patches; done
         pure unit
       Just patch -> do
-        Debug.debugA $ "[loop] patch:\n" <> indent (pretty patch)
+        Debug.debugA $ "[loop] learn patch:" <\> indent (pretty patch)
         -- learn patch, yielding new patches
         patches <- learn patch
+        Debug.debugA $ "[loop] queued patches:" <> indent (pretty patches)
         -- insert new patches into queue
         traverse_ insert patches
         -- loop

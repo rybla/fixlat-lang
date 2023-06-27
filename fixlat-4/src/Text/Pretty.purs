@@ -51,5 +51,7 @@ indentN i =
 bullets strs = "\n" <> (String.joinWith "\n" $ ("• " <> _) <$> strs)
 
 appendPlus str1 str2 = str1 <> " " <> str2
+infixr 4 appendPlus as <+>
 
-infixr 6 appendPlus as <+>
+appendNewline str1 str2 = str1 <> "\n" <> str2
+infixr 3 appendNewline as <\>
