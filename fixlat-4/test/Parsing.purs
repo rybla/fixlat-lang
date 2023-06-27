@@ -77,21 +77,21 @@ makeGrammarRulesAndAxioms (Grammar grammar) =
           prevIndex = get >>= \i -> pure (makeVarIndex i)
           nextIndex = modify (_ + 1) >>= \i -> pure (makeVarIndex i)
 
-          go form = case Array.uncons form of
+          go isFirst form = case Array.uncons form of
             Nothing -> bug "[makeGrammarRulesAndAxioms] empty form"
             Just {head: sym, tail: form'} -> do
               i0 <- prevIndex
               i1 <- nextIndex
-              HypothesisRule 
-                { quantifications: make (forAll [i0 /\ lty_index, i1 /\ lty_index])
+              HypothesisRule
+                { quantifications: make (forAll ((if isFirst then [i0 /\ lty_index] else []) <> [i1 /\ lty_index]))
                 , proposition: parsed (var_index i0) (var_index i1) (lit_symbol sym)
                 , filter: Nothing } <$>
                 if Array.null form' then 
                   pure $ Right $ parsed (var_index (makeVarIndex 0)) (var_index i1) (lit_symbol nt)
                 else
-                  Left <$> go form'
+                  Left <$> go false form'
         in
-        evalState (go (CodeUnits.toCharArray _form)) 0
+        evalState (go true (CodeUnits.toCharArray _form)) 0
   }
 
 makeInputAxioms :: String -> Map.Map AxiomName Axiom
@@ -145,11 +145,17 @@ main :: Effect Unit
 main = do
   Console.log "[Parsing.main] Start"
   let
+    -- grammar = Grammar
+    --   { nonterminals: Map.fromFoldable
+    --       [ 'X' /\ [ "Y", "XX" ]
+    --       , 'Y' /\ [ "ab", "ba" ] ] }
+    -- input = "ababa"
+
     grammar = Grammar
       { nonterminals: Map.fromFoldable
-          [ 'X' /\ [ "Y", "XX" ]
-          , 'Y' /\ [ "ab", "ba" ] ] }
-    input = "ababa"
+          [ 'S' /\ [ "a", "(S)" ] ] }
+    -- input = "(a)"
+    input = "(a)"
 
     ctx :: ModuleCtx
     ctx = 

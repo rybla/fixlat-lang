@@ -30,7 +30,7 @@ import Data.String as String
 import Data.Traversable (maximum, traverse)
 import Hole (hole)
 import Prim as Prim
-import Text.Pretty (class Pretty, bullets, indent, lines, parens, pretty, ticks, (<+>))
+import Text.Pretty (class Pretty, brackets, bullets, indent, lines, parens, pretty, ticks, (<+>))
 
 --------------------------------------------------------------------------------
 -- Module
@@ -94,7 +94,7 @@ instance Pretty DataType where
     IntDataType -> "int"
     NatDataType -> "nat"
     StringDataType -> "string"
-    TupleDataType ty1 ty2 -> "tuple" <> parens (pretty ty1 <> ", " <> pretty ty2)
+    TupleDataType ty1 ty2 -> parens (pretty ty1 <> ", " <> pretty ty2)
 
 -- | A LatticeType specifies a lattice ordering over a uniquely deTermined
 -- | underlying DataType.
@@ -120,7 +120,7 @@ instance Pretty LatticeType where
     StringLatticeType -> "string"
     OpLatticeType lty -> "op" <> parens (pretty lty)
     DiscreteLatticeType ty -> "discrete" <> parens (pretty ty)
-    TupleLatticeType LexicographicTupleOrdering lty1 lty2 -> "tuple" <> parens (pretty lty1 <> ", " <> pretty lty2)
+    TupleLatticeType LexicographicTupleOrdering lty1 lty2 -> parens (pretty lty1 <> ", " <> pretty lty2)
 
 data TupleOrdering
   = LexicographicTupleOrdering
@@ -152,7 +152,13 @@ instance Pretty (Term ty TermName) where
   pretty = case _ of
     NeutralTerm fun tm _ -> pretty fun <> parens (pretty tm)
     PrimitiveTerm prim [] _ -> pretty prim
-    PrimitiveTerm prim tms _ -> pretty prim <> parens (pretty tms)
+    PrimitiveTerm prim tms _ -> case prim /\ tms of
+      TuplePrimitive /\ [x, y] -> parens (pretty x <> ", " <> pretty y)
+      BoolPrimitive false /\ [] -> "false"
+      BoolPrimitive true /\ [] -> "true"
+      IntPrimitive x /\ [] -> show x
+      StringPrimitive s /\ [] -> show s
+      _ -> pretty prim <> parens (pretty tms)
     NamedTerm x _ -> pretty x
 
 instance Pretty (Term ty Void) where pretty = pretty <<< toSymbolicTerm
@@ -306,7 +312,7 @@ derive instance Generic (Proposition ty x) _
 instance (Show x, Show ty) => Show (Proposition ty x) where show x = genericShow x
 derive instance Bifunctor Proposition
 
-instance Pretty (Proposition ty TermName) where pretty (Proposition rel tm) = pretty rel <> parens (pretty tm)
+instance Pretty (Proposition ty TermName) where pretty (Proposition rel tm) = pretty rel <> brackets (pretty tm)
 instance Pretty (Proposition ty Void) where pretty = pretty <<< toSymbolicProposition
 
 substituteProposition :: Map.Map TermName SymbolicTerm -> SymbolicProposition -> SymbolicProposition
