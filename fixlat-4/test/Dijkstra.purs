@@ -248,6 +248,7 @@ makeModule graph = do
         ]
     }
 
+makeRawEdge :: Int -> Int -> Int -> (Int /\ Int) /\ Int
 makeRawEdge a b w = (a /\ b) /\ w
 infix 1 makeRawEdge as ~~>
 
