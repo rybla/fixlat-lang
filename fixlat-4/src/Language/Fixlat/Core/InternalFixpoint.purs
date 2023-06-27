@@ -234,7 +234,6 @@ learn (ConclusionPatch _prop) = do
   rules <- gets _.rules
   join <<< Array.fromFoldable <<< Map.values <$> rules `for` \rule -> do
     applyRule rule prop
--- learn (ApplyPatch quantifications expectation mb_condition conclusion) = do
 learn (ApplyPatch rule) = do
   -- For each candidate proposition in the database
   candidates <- getCandidates
@@ -246,9 +245,6 @@ appleRuleAsPatch rule = pure $ ApplyPatch rule
 
 applyRule :: forall m. MonadEffect m => G.Rule -> G.ConcreteProposition -> FixpointT m (Array Patch)
 applyRule (G.HypothesisRule hyp conc) prop = do
-  -- TODO: unify hypothesis of rule with prop, and yield the patch that is the
-  -- rest of the rule
-  -- liftFixpointT (runUnifyT ctx (unifyProposition hyp.proposition prop)) >>= case _ of
   liftFixpointT (unify hyp.quantifications (Left (hyp.proposition /\ prop))) >>= case _ of
     Left _err -> do
       -- not unifiable, so ignore candidate
