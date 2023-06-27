@@ -6,8 +6,8 @@ import Data.Variant
 import Prelude
 import Prim hiding (Type)
 
-import Control.Assert (Assertion, assert)
-import Control.Assert.Assertions (equal, exactLength)
+import Control.Assert (Assertion, assert, assertI)
+import Control.Assert.Assertions (equal, exactLength, just)
 import Control.Assert.Refined (class Refined)
 import Control.Bug (bug)
 import Data.Array as Array
@@ -20,13 +20,14 @@ import Data.List (List(..), (:))
 import Data.List as List
 import Data.Make (class Make)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (class Newtype)
 import Data.Ord.Generic (genericCompare)
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Show.Generic (genericShow)
-import Data.Traversable (traverse)
+import Data.String as String
+import Data.Traversable (maximum, traverse)
 import Hole (hole)
 import Prim as Prim
 import Text.Pretty (class Pretty, bullets, indent, lines, parens, pretty, ticks, (<+>))
@@ -371,23 +372,31 @@ instance Pretty Rule where
   --           , "filter:" <+> pretty hyp.filter
   --           ]))
   --       , "conclusion:\n" <> indent (pretty conc) ] ]
-  pretty (HypothesisRule hyp conc) = 
-    "│ " <>
-    (case hyp.quantifications of
-      Quantifications Nil -> ""
-      qs -> pretty qs <> ". ") <>
-    pretty hyp.proposition <>
-    maybe "" (\cond -> " such that " <> pretty cond) hyp.filter <> "\n" <>
-    case conc of
-      Left rule -> pretty rule
-      Right prop ->
-        "├────────────────────────────────────────────────────────────────" <> "\n" <>
-        "│ " <> pretty prop
+  pretty (HypothesisRule _hyp _conc) = do
+    let
+      go' :: Array String -> RuleHypothesis -> Rule \/ SymbolicProposition -> Array String /\ Array String
+      go' strs hyp conc = do
+        let strs' = Array.snoc strs $
+              "│ " <>
+              (case hyp.quantifications of
+                Quantifications Nil -> ""
+                qs -> pretty qs <> ". ") <>
+              pretty hyp.proposition <>
+              maybe "" (\cond -> " such that " <> pretty cond) hyp.filter
+        case conc of
+          Left (HypothesisRule hyp' conc') -> go' strs' hyp' conc'
+          Right prop -> strs' /\ ["│ " <> pretty prop]
+
+      strs1 /\ strs2 = go' [] _hyp _conc
+      max_length = assertI just $ maximum (String.length <$> strs1 <> strs2)
+      padding_right = 4
+      hline = "├" <> (String.fromCodePointArray (Array.replicate (max_length + padding_right) (String.codePointFromChar '─')))
+    "╭\n" <> lines [lines strs1, hline, lines strs2] <> "\n╰ "
+      
 
 instance Refined "Rule" Rule where
   -- TODO: encode requirements
-  -- validate' = hole "validate Rule"
-  validate' = \_ -> Nothing
+  validate' = \_ -> pure unit
 
 substituteRule :: Map.Map TermName SymbolicTerm -> Rule -> Rule
 substituteRule sigma (HypothesisRule hyp conc) = 

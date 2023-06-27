@@ -208,8 +208,9 @@ module_ = Module
 main :: Effect Unit
 main = do
   Console.log "[Dijkstra.main] Start"
-  let ctx = {module_}
-
+  let ctx = 
+        { module_
+        , initial_gas: 1000 }
   when true do
     let db = emptyDatabase
     Console.log $ "[Dijkstra.main] Input database:\n" <> pretty db <> "\n"

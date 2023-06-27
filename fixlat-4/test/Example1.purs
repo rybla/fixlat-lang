@@ -122,8 +122,10 @@ main = do
   Console.log "[Test.Add.main]"
   let db = emptyDatabase
   Console.log $ "\nInput database:\n" <> pretty db <> "\n"
+  let ctx = 
+        { module_
+        , initial_gas: 100 }
   let m = fixpoint db _db1 _db1_fix1
-  let ctx = {module_}
   db' <- runReaderT (runModuleT m) ctx
   Console.log $ "\nOutput database:\n" <> pretty db' <> "\n"
   pure unit
