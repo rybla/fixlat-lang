@@ -265,8 +265,8 @@ main = do
 
     ctx :: ModuleCtx
     ctx = 
-        { module_: makeModule graph
-        , initial_gas: 100 }
+      { module_: makeModule graph
+      , initial_gas: 100 }
 
   let db = emptyDatabase
   Console.log $ "[Dijkstra.main] Input database:\n" <> pretty db <> "\n"
