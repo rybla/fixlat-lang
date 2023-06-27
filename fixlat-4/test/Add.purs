@@ -100,7 +100,7 @@ main = do
   Console.log $ "Input database:\n\n" <> show db <> "\n\n"
   let ctx = 
         { module_
-        , initial_gas: 100 }
+        , initial_gas: 10 }
   let m = do
         fixpoint db _db_add_zero _fix_main
   db' <- runReaderT (runModuleT m) ctx

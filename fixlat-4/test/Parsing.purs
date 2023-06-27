@@ -153,14 +153,17 @@ main = do
 
     grammar = Grammar
       { nonterminals: Map.fromFoldable
-          [ 'S' /\ [ "a", "(S)" ] ] }
-    -- input = "(a)"
-    input = "(a)"
+          [ 'S' /\ [ "a", "(S)", "SS" ] ] }
+    input = 
+      -- "(a)" -- works
+      -- "(a)(a)" -- works
+      "((a))" -- TODO: doesn't work
+      -- "(a)(((aa)))" -- TODO: doesn't work
 
     ctx :: ModuleCtx
     ctx = 
       { module_: makeModule grammar input
-      , initial_gas: 100 }
+      , initial_gas: 1000 }
 
   let db = emptyDatabase
   Console.log $ "[Parsing.main] Input database:" <> pretty db <> "\n"

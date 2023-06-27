@@ -21,6 +21,7 @@ import Data.Newtype (unwrap)
 import Data.Show.Generic (genericShow)
 import Data.String as String
 import Data.Traversable (for, traverse)
+import Data.Tuple (curry)
 import Data.Tuple.Nested ((/\))
 import Effect.Class (class MonadEffect)
 import Hole (hole)
@@ -57,9 +58,13 @@ fixpoint (Database props) databaseSpecName fixpointSpecName = do
             (\ruleName _ -> ruleName `Array.elem` (unwrap fixpointSpec).ruleNames)
             (unwrap moduleCtx.module_).rules
         , queue
-        -- TODO: this isn't right, but not sure how to do ordering yet, so this will
-        -- just ensure that the queue is first-in-first-out
-        , comparePatch: \_ _ -> GT }
+        -- TODO: not sure how to do this exactly, but this works for now
+        , comparePatch: curry case _ of
+            -- conclusions should be processed BEFORE applications, since a
+            -- conclusion can teach something that could be used by an
+            -- application
+            ConclusionPatch _ /\ ApplyPatch _ -> LT
+            _ -> GT }
 
   Debug.debugA $ "[fixpoint] env.rules:" <> pretty env.rules
 

@@ -366,6 +366,7 @@ data Rule
   = HypothesisRule
       RuleHypothesis
       (Rule \/ SymbolicProposition)
+  -- TODO: something like: | LetRule Binding Rule
 
 type RuleHypothesis = 
   { quantifications :: Quantifications
