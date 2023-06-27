@@ -11,13 +11,14 @@ import Data.Maybe (Maybe, maybe)
 import Data.Set (Set)
 import Data.Set as Set
 import Data.String as String
+import Data.String.CodeUnits as CodeUnits
 import Data.Tuple (Tuple(..))
 
 class Pretty a where pretty :: a -> String
 
 instance Pretty String where pretty str = str
 instance Pretty Int where pretty = show
-instance Pretty Char where pretty = show
+instance Pretty Char where pretty = CodeUnits.singleton
 instance Pretty Boolean where pretty = show
 instance Pretty Number where pretty = show
 

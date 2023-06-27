@@ -46,7 +46,7 @@ fixpoint (Database props) databaseSpecName fixpointSpecName = do
   -- Initialize queue with patches that conclude with each prop in the database
   -- i.e. everything starts off as out-of-date.
   let queue = Queue (List.fromFoldable (ConclusionPatch <$> props'))
-  Debug.debugA $ "[fixpoint] initial queue:" <> pretty queue
+  Debug.debugA $ "[fixpoint] env.queue:" <> pretty queue
 
   initial_gas <- getModuleCtx <#> _.initial_gas
   let env = 
@@ -61,7 +61,7 @@ fixpoint (Database props) databaseSpecName fixpointSpecName = do
         -- just ensure that the queue is first-in-first-out
         , comparePatch: \_ _ -> GT }
 
-  Debug.debugA $ "[fixpoint] initial env.rules:" <> pretty env.rules
+  Debug.debugA $ "[fixpoint] env.rules:" <> pretty env.rules
 
   env' <- execStateT loop env
 
@@ -294,11 +294,12 @@ isSubsumed (ConclusionPatch prop) = do
 
 -- | `prop1` subsumes `prop2` if `prop1 >= prop2`.
 subsumes :: forall m. MonadEffect m => G.ConcreteProposition -> G.ConcreteProposition -> FixpointT m Boolean
-subsumes prop1 prop2 = do
-  -- let result = (prop1 ~? prop2) == Just GT
-  -- Debug.debugA $ "[subsumes] " <> pretty prop1 <> "  >=?  " <> pretty prop2 <> "  ==>  " <> pretty result
-  -- pure result
+subsumes prop1 prop2 =
   pure $ (prop1 ~? prop2) == Just GT
+-- subsumes prop1 prop2 = do
+--   let result = (prop1 ~? prop2) == Just GT
+--   Debug.debugA $ "[subsumes] " <> pretty prop1 <> "  >=?  " <> pretty prop2 <> "  ==>  " <> pretty result
+--   pure result
 
 --------------------------------------------------------------------------------
 -- Evaluation

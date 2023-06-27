@@ -1,9 +1,21 @@
 module Test.Parsing where
 
+import Data.Tuple.Nested
 import Language.Fixlat.Core.Grammar
 import Prelude
 
+import Control.Bug (bug)
 import Control.Monad.Reader (runReaderT)
+import Control.Monad.State (evalState, get, modify, modify_, runState)
+import Data.Array as Array
+import Data.Either (Either(..))
+import Data.Make (make)
+import Data.Map as Map
+import Data.Maybe (Maybe(..))
+import Data.Newtype as Newtype
+import Data.String as String
+import Data.String.CodeUnits as CodeUnits
+import Data.Tuple (Tuple(..), uncurry)
 import Effect (Effect)
 import Effect.Class.Console as Console
 import Hole (hole)
@@ -11,34 +23,121 @@ import Language.Fixlat.Core.InternalFixpoint (emptyDatabase, fixpoint)
 import Language.Fixlat.Core.ModuleT (ModuleCtx, runModuleT)
 import Text.Pretty (pretty)
 
+forAll = map (Left <<< uncurry UniversalQuantification)
+exists = map (Right <<< uncurry ExistentialQuantification)
+
+tupleLex = TupleLatticeType LexicographicTupleOrdering
+
+lty_index = IntLatticeType
+dty_index = IntDataType
+lit_index i = PrimitiveTerm (IntPrimitive i) [] lty_index
+var_index x = NamedTerm x lty_index
+
+lty_symbol = StringLatticeType
+dty_symbol = StringDataType
+lit_symbol c = PrimitiveTerm (StringPrimitive (CodeUnits.singleton c)) [] lty_symbol
+var_symbol x = NamedTerm x lty_symbol
+
 -- relation: parsed
 
 _parsed = Name "parsed" :: RelationName
 
-parsed_domain :: LatticeType
-parsed_domain = hole "parsed_domain"
+lty_parsed :: LatticeType
+lty_parsed = DiscreteLatticeType dty_parsed
+
+dty_parsed :: DataType
+dty_parsed = (dty_index `TupleDataType` dty_index) `TupleDataType` dty_symbol
 
 parsed :: forall x. Term LatticeType x -> Term LatticeType x -> Term LatticeType x -> Proposition LatticeType x
 parsed i1 i2 c = Proposition _parsed $
   PrimitiveTerm TuplePrimitive
     [ PrimitiveTerm TuplePrimitive [i1, i2] 
-        (TupleLatticeType LexicographicTupleOrdering 
-          (typeOfTerm i1)
-          (typeOfTerm i2) )
+        (lty_index `tupleLex` lty_index)
     , c ]
-    parsed_domain
+    lty_parsed
 
 -- database: db
 
 _db = Name "db" :: DatabaseSpecName
 _db_fix = Name "db_fix" :: FixpointSpecName
 
-data Grammar -- = TODO
+data Grammar = Grammar
+  { nonterminals :: Map.Map Char (Array String) }
+
+makeGrammarRulesAndAxioms :: Grammar -> {axioms :: Map.Map AxiomName Axiom, rules :: Map.Map RuleName Rule}
+makeGrammarRulesAndAxioms (Grammar grammar) =
+  {
+    axioms: Map.empty
+  ,
+    rules: Map.fromFoldable $ Array.concat $ Map.toUnfoldable grammar.nonterminals <#> \(nt /\ forms) ->
+      flip Array.mapWithIndex forms \formIx _form ->
+        Name ("nonterminal_" <> pretty nt <> "_" <> show formIx) /\ 
+        let
+          makeVarIndex i = Name ("i" <> show i) :: TermName
+          prevIndex = get >>= \i -> pure (makeVarIndex i)
+          nextIndex = modify (_ + 1) >>= \i -> pure (makeVarIndex i)
+
+          go form = case Array.uncons form of
+            Nothing -> bug "[makeGrammarRulesAndAxioms] empty form"
+            Just {head: sym, tail: form'} -> do
+              i0 <- prevIndex
+              i1 <- nextIndex
+              HypothesisRule 
+                { quantifications: make (forAll [i0 /\ lty_index, i1 /\ lty_index])
+                , proposition: parsed (var_index i0) (var_index i1) (lit_symbol sym)
+                , filter: Nothing } <$>
+                if Array.null form' then 
+                  pure $ Right $ parsed (var_index (makeVarIndex 0)) (var_index i1) (lit_symbol nt)
+                else
+                  Left <$> go form'
+        in
+        evalState (go (CodeUnits.toCharArray _form)) 0
+  }
+
+makeInputAxioms :: String -> Map.Map AxiomName Axiom
+makeInputAxioms str =
+  Map.fromFoldable $ flip Array.mapWithIndex (CodeUnits.toCharArray str) \i c ->
+    Name ("input_" <> show i) /\
+    Axiom (parsed (lit_index i) (lit_index (i + 1)) (lit_symbol c))
 
 -- module
 
-makeModule :: Grammar -> Module
-makeModule = hole "makeModule"
+makeModule :: Grammar -> String -> Module
+makeModule grammar input = do
+  let
+    {axioms: grammarAxioms, rules: grammarRules} = makeGrammarRulesAndAxioms grammar
+    inputAxioms = makeInputAxioms input
+
+    axioms = grammarAxioms `Map.union` inputAxioms
+    rules = grammarRules
+
+  emptyModule # Newtype.over Module _
+    {
+      relations = Map.fromFoldable
+        [
+          Tuple _parsed $ Relation lty_parsed
+        ]
+    ,
+      axioms = axioms
+    , 
+      rules = rules
+    ,
+      databaseSpecs = Map.fromFoldable
+        [
+          Tuple _db $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
+            { 
+              fixpoints = Map.fromFoldable
+                [
+                  Tuple _db_fix $ FixpointSpec
+                    {
+                      axiomNames: Array.fromFoldable $ Map.keys axioms
+                    ,
+                      ruleNames: Array.fromFoldable $ Map.keys rules
+                    }
+                ]
+            }
+        ]
+    }
 
 -- main
 
@@ -46,11 +145,15 @@ main :: Effect Unit
 main = do
   Console.log "[Parsing.main] Start"
   let
-    grammar = hole "grammar" :: Grammar
+    grammar = Grammar
+      { nonterminals: Map.fromFoldable
+          [ 'X' /\ [ "Y", "XX" ]
+          , 'Y' /\ [ "ab", "ba" ] ] }
+    input = "ababa"
 
     ctx :: ModuleCtx
     ctx = 
-      { module_: makeModule grammar
+      { module_: makeModule grammar input
       , initial_gas: 100 }
 
   let db = emptyDatabase

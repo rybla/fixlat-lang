@@ -80,6 +80,7 @@ data DataType
   = BoolDataType
   | IntDataType
   | NatDataType
+  | StringDataType
   | TupleDataType DataType DataType
 
 derive instance Generic DataType _
@@ -92,6 +93,7 @@ instance Pretty DataType where
     BoolDataType -> "bool"
     IntDataType -> "int"
     NatDataType -> "nat"
+    StringDataType -> "string"
     TupleDataType ty1 ty2 -> "tuple" <> parens (pretty ty1 <> ", " <> pretty ty2)
 
 -- | A LatticeType specifies a lattice ordering over a uniquely deTermined
@@ -100,6 +102,7 @@ data LatticeType
   = BoolLatticeType
   | IntLatticeType
   | NatLatticeType
+  | StringLatticeType
   | OpLatticeType LatticeType
   | DiscreteLatticeType DataType
   | TupleLatticeType TupleOrdering LatticeType LatticeType
@@ -114,6 +117,7 @@ instance Pretty LatticeType where
     BoolLatticeType -> "bool"
     IntLatticeType -> "int"
     NatLatticeType -> "nat"
+    StringLatticeType -> "string"
     OpLatticeType lty -> "op" <> parens (pretty lty)
     DiscreteLatticeType ty -> "discrete" <> parens (pretty ty)
     TupleLatticeType LexicographicTupleOrdering lty1 lty2 -> "tuple" <> parens (pretty lty1 <> ", " <> pretty lty2)
@@ -180,12 +184,14 @@ instance PartialOrd ConcreteTerm where
       BoolLatticeType | (BoolPrimitive true /\ []) /\ (BoolPrimitive false /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just GT
       BoolLatticeType | (BoolPrimitive true /\ []) /\ (BoolPrimitive true /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
       
-      IntLatticeType | (IntPrimitive x1 /\ []) /\ (IntPrimitive x2 /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just (compare x1 x2)
+      IntLatticeType | (IntPrimitive x1 /\ []) /\ (IntPrimitive x2 /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just (x1 `compare` x2)
       
       NatLatticeType | (ZeroPrimitive /\ []) /\ (ZeroPrimitive /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
       NatLatticeType | (ZeroPrimitive /\ []) /\ (SucPrimitive /\ [_]) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just LT
       NatLatticeType | (SucPrimitive /\ [_]) /\ (ZeroPrimitive /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just GT
       NatLatticeType | (SucPrimitive /\ [x1]) /\ (SucPrimitive /\ [x2]) <- (p1 /\ args1) /\ (p2 /\ args2) -> comparePartial x1 x2
+
+      StringLatticeType | (StringPrimitive s1 /\ []) /\ (StringPrimitive s2 /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just (s1 `compare` s2)
 
       lty -> bug $
         "[comparePartial] Unexpected term form:\n" <> bullets
@@ -203,6 +209,7 @@ data Primitive
   | SucPrimitive
   | TuplePrimitive
   | IntPrimitive Int
+  | StringPrimitive String
   | BoolPrimitive Boolean
 
 derive instance Generic Primitive _
@@ -215,8 +222,9 @@ instance Pretty Primitive where
     ZeroPrimitive -> "zero"
     SucPrimitive -> "suc"
     TuplePrimitive -> "tuple"
-    IntPrimitive x -> pretty x
-    BoolPrimitive x -> pretty x
+    IntPrimitive x -> show x
+    BoolPrimitive x -> show x
+    StringPrimitive x -> show x
 
 substituteTerm :: Map.Map TermName SymbolicTerm -> SymbolicTerm -> SymbolicTerm
 substituteTerm sigma (NeutralTerm fun tms ty) = NeutralTerm fun (substituteTerm sigma <$> tms) ty

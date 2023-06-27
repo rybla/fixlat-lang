@@ -130,7 +130,7 @@ makeModule graph = do
     , 
       relations = Map.fromFoldable 
         [ 
-          Tuple _distance $ Relation $ (node `lex` node) `lex` weight
+          Tuple _distance $ Relation $ distance_type
         ]
     , 
       axioms = 
@@ -233,7 +233,8 @@ makeModule graph = do
     , 
       databaseSpecs = Map.fromFoldable
         [ Tuple _db $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
-            { fixpoints = Map.fromFoldable
+            { 
+              fixpoints = Map.fromFoldable
                 [ 
                   Tuple _db_fix $ FixpointSpec 
                     { axiomNames: Array.fromFoldable (Map.keys db_graph)
