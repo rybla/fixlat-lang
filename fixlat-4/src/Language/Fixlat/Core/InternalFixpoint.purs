@@ -29,6 +29,7 @@ import Language.Fixlat.Core.Grammar (Axiom(..), Proposition)
 import Language.Fixlat.Core.Grammar as G
 import Language.Fixlat.Core.ModuleT (ModuleT, getModuleCtx)
 import Language.Fixlat.Core.Unification (unify)
+import Record as R
 import Text.Pretty (class Pretty, bullets, indent, pretty, ticks, (<+>), (<\>))
 import Type.Proxy (Proxy(..))
 
@@ -50,21 +51,27 @@ fixpoint (Database props) databaseSpecName fixpointSpecName = do
   Debug.debugA $ "[fixpoint] env.queue:" <> pretty queue
 
   initial_gas <- getModuleCtx <#> _.initial_gas
-  let env = 
-        { initial_gas
-        , gas: initial_gas
-        , database: Database []
-        , rules: Map.filterWithKey 
-            (\ruleName _ -> ruleName `Array.elem` (unwrap fixpointSpec).ruleNames)
-            (unwrap moduleCtx.module_).rules
-        , queue
-        -- TODO: not sure how to do this exactly, but this works for now
-        , comparePatch: curry case _ of
-            -- conclusions should be processed BEFORE applications, since a
-            -- conclusion can teach something that could be used by an
-            -- application
-            ConclusionPatch _ /\ ApplyPatch _ -> LT
-            _ -> GT }
+  let 
+    env :: FixpointEnv
+    env = 
+      { initial_gas
+      , gas: initial_gas
+      , database: Database []
+        -- only keep rules specified by fixpointSpec
+      , rules: Map.filterWithKey 
+          (\ruleName _ -> ruleName `Array.elem` (unwrap fixpointSpec).ruleNames)
+          (unwrap moduleCtx.module_).rules
+      , partialRules: []
+      , queue
+      -- TODO: not sure how to do this exactly, but this works for now
+      , comparePatch: curry case _ of
+          -- TODO: this doesn't need to be enabled if we are accounting for
+          -- partialRules
+          -- -- conclusions should be processed BEFORE applications, since a
+          -- -- conclusion can teach something that could be used by an
+          -- -- application
+          -- ConclusionPatch _ /\ ApplyPatch _ -> LT
+          _ -> GT }
 
   Debug.debugA $ "[fixpoint] env.rules:" <> pretty env.rules
 
@@ -88,6 +95,7 @@ type FixpointEnv =
   , gas :: Int
   , database :: Database
   , rules :: Map.Map G.RuleName G.Rule
+  , partialRules :: Array G.Rule
   , queue :: Queue
   , comparePatch :: Patch -> Patch -> Ordering
   }
@@ -95,6 +103,7 @@ type FixpointEnv =
 _database = Proxy :: Proxy "database"
 _queue = Proxy :: Proxy "queue"
 _comparePatch = Proxy :: Proxy "comparePatch"
+_partialRules = Proxy :: Proxy "partialRules"
 
 data Patch
   = ApplyPatch G.Rule
@@ -111,17 +120,31 @@ substitutePatch :: Map.Map G.TermName G.SymbolicTerm -> Patch -> Patch
 substitutePatch sigma (ConclusionPatch prop) = ConclusionPatch (assertI G.concreteProposition (G.substituteProposition sigma (G.toSymbolicProposition prop)))
 substitutePatch sigma (ApplyPatch rule) = ApplyPatch (G.substituteRule sigma rule)
 
+getAllRules :: forall m. MonadEffect m => FixpointT m (Array G.Rule)
+getAllRules = do
+  rules <- gets _.rules <#> Array.fromFoldable <<< Map.values
+  partialRules <- gets _.partialRules
+  pure $ rules <> partialRules
+
+insertPartialRule :: forall m. MonadEffect m => G.Rule -> FixpointT m Unit
+insertPartialRule rule = modify_ $ R.modify _partialRules (rule Array.: _)
+
 --------------------------------------------------------------------------------
 -- loop
 --------------------------------------------------------------------------------
 
 loop :: forall m. MonadEffect m => FixpointT m Unit
 loop = do
-  -- db <- gets _.database
-  -- Debug.debugA $ "[fixpoint] database:" <> pretty db
+  -- do
+  --   db <- gets _.database
+  --   Debug.debugA $ "[loop] database:" <> pretty db
+
+  -- do
+  --   partialRules <- gets _.partialRules
+  --   Debug.debugA $ "[loop] partialRules:" <> indent (bullets (Array.fromFoldable (pretty <$> partialRules)))
 
   queue <- gets _.queue
-  Debug.debugA $ "[fixpoint] queue:" <> indent (pretty queue)
+  Debug.debugA $ "[loop] queue:" <> indent (pretty queue)
 
   gas <- _.gas <$> modify \env -> env {gas = env.gas - 1}
   if gas <= 0 then bug "[loop] out of gas" else do
@@ -237,10 +260,16 @@ learn (ConclusionPatch _prop) = do
   void $ insertIntoDatabase prop
   -- Yield any new patches that are applications of rules that use the
   -- newly-derived prop
-  rules <- gets _.rules
-  join <<< Array.fromFoldable <<< Map.values <$> rules `for` \rule -> do
-    applyRule rule prop
+  rules <- getAllRules 
+  join <$> for rules \rule -> applyRule rule prop
+    
 learn (ApplyPatch rule) = do
+  -- TODO: here I add the rule to the database, which is necessary if there are
+  -- hypotheses for this apply patch that could be learned later. Alternatively,
+  -- you could order the queue such that conclusions are processed before
+  -- applications.
+  insertPartialRule rule
+
   -- For each candidate proposition in the database
   candidates <- getCandidates
   Array.concat <$> for candidates \candidate -> do

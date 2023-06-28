@@ -38,6 +38,18 @@ dty_symbol = StringDataType
 lit_symbol c = PrimitiveTerm (StringPrimitive (CodeUnits.singleton c)) [] lty_symbol
 var_symbol x = NamedTerm x lty_symbol
 
+{-
+Set : DataType -> DataType
+PowerSetLattice : DataType -> DataType
+PowerSetLattice(D) = Set(D) with subset ordering
+-}
+
+{-
+actually its over 
+
+  subset_lattice(power_set(nat x nat x sym))
+-}
+
 -- relation: parsed
 
 _parsed = Name "parsed" :: RelationName
