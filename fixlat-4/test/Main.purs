@@ -30,8 +30,8 @@ main = do
   Console.log "[Test.Main.main]"
   Dijkstra.main
 
-import Test.Parsing as Parsing
-main :: Effect Unit
-main = do
-  Console.log "[Test.Main.main]"
-  Parsing.main
+-- import Test.Parsing as Parsing
+-- main :: Effect Unit
+-- main = do
+--   Console.log "[Test.Main.main]"
+--   Parsing.main
