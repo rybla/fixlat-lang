@@ -12,6 +12,7 @@ import Effect.Class.Console as Console
 --   Example1.main
 
 -- import Test.Add as Add
+-- import Test.Add as Add
 -- main :: Effect Unit
 -- main = do
 --   Console.log "[Test.Main.main]"
