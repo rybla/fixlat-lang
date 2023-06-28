@@ -21,7 +21,13 @@ import Effect.Class.Console as Console
 -- main :: Effect Unit
 -- main = do
 --   Console.log "[Test.Main.main]"
---   Dijkstra.main
+--   Add.main
+
+import Test.Dijkstra as Dijkstra
+main :: Effect Unit
+main = do
+  Console.log "[Test.Main.main]"
+  Dijkstra.main
 
 import Test.Parsing as Parsing
 main :: Effect Unit

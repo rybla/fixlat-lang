@@ -131,6 +131,8 @@ makeModule graph = do
       relations = Map.fromFoldable 
         [ 
           Tuple _distance $ Relation $ distance_type
+        , 
+          Tuple _edge $ Relation $ edge_type
         ]
     , 
       axioms = 
