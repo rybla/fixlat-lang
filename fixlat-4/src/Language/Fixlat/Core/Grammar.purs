@@ -454,6 +454,7 @@ instance Pretty ExistentialQuantification where pretty (ExistentialQuantificatio
 -- Database
 --------------------------------------------------------------------------------
 
+-- TODO: maybe rename to "Interface"?
 newtype DatabaseSpec = DatabaseSpec
   { fixpoints :: Map.Map FixpointSpecName FixpointSpec
   , queries :: Map.Map QuerySpecName QuerySpec
