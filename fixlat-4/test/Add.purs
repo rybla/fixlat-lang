@@ -94,8 +94,8 @@ module_ = emptyModule # Newtype.over Module _
       [ Tuple _db_add_zero $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
           { fixpoints = Map.fromFoldable
               [ Tuple _fix_main $ FixpointSpec
-                  { axiomNames: [_add_zero_zero]
-                  , ruleNames: [_add_n_suc]
+                  { axiomNames: Just $ [_add_zero_zero]
+                  , ruleNames: Just $ [_add_n_suc]
                   }
               ]
           } 

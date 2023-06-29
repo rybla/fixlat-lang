@@ -6,6 +6,7 @@ import Control.Assert (assert, assertI)
 import Control.Assert.Assertions (just, keyOfMap)
 import Control.Bug (bug)
 import Control.Debug as Debug
+import Control.Monad.Reader (ask)
 import Control.Monad.State (StateT, execStateT, gets, modify, modify_)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as Array
@@ -59,8 +60,10 @@ fixpoint (Database props) databaseSpecName fixpointSpecName = do
   let databaseSpec = assertI keyOfMap $ databaseSpecName /\ (unwrap moduleCtx.module_).databaseSpecs
   let fixpointSpec = assertI keyOfMap $ fixpointSpecName /\ (unwrap databaseSpec).fixpoints
 
-  let axioms = (unwrap fixpointSpec).axiomNames <#> \axiomName -> 
-        assertI keyOfMap (axiomName /\ (unwrap moduleCtx.module_).axioms)
+  let axioms = case (unwrap fixpointSpec).axiomNames of
+        Nothing -> Array.fromFoldable (unwrap moduleCtx.module_).axioms
+        Just axiomNames -> axiomNames <#> \axiomName -> 
+          assertI keyOfMap (axiomName /\ (unwrap moduleCtx.module_).axioms)
   let props' = props <> (axioms <#> \(Axiom prop) -> prop)
 
   -- Initialize queue with patches that conclude with each prop in the database
@@ -72,14 +75,16 @@ fixpoint (Database props) databaseSpecName fixpointSpecName = do
   let 
     env :: FixpointEnv
     env = 
-      { initial_gas
-      , gas: initial_gas
+      { gas: initial_gas
       , database: Database []
         -- only keep rules specified by fixpointSpec
-      , rules: Map.filterWithKey 
-          (\ruleName _ -> ruleName `Array.elem` (unwrap fixpointSpec).ruleNames) $
-          map make $
-          (unwrap moduleCtx.module_).rules
+      , rules: case (unwrap fixpointSpec).ruleNames of
+          Nothing -> make <$> (unwrap moduleCtx.module_).rules
+          Just ruleNames -> 
+            Map.filterWithKey 
+            (\ruleName _ -> ruleName `Array.elem` ruleNames) $
+            map make $
+            (unwrap moduleCtx.module_).rules
       , partialRules: []
       , queue
       -- TODO: not sure how to do this exactly, but this works for now
@@ -97,7 +102,7 @@ fixpoint (Database props) databaseSpecName fixpointSpecName = do
   env' <- execStateT loop env
 
   Debug.debugA "[fixpoint] end"
-  Debug.debugA $ "[fixpoint] gas used: " <> show (env'.initial_gas - env'.gas)
+  Debug.debugA $ "[fixpoint] gas used: " <> show (initial_gas - env'.gas)
   pure env'.database
 
 --------------------------------------------------------------------------------
@@ -110,10 +115,11 @@ liftFixpointT :: forall m a. MonadEffect m => ModuleT m a -> FixpointT m a
 liftFixpointT = lift
 
 type FixpointEnv =
-  { initial_gas :: Int
-  , gas :: Int
+  { gas :: Int
   , database :: Database
   , rules :: Map.Map G.RuleName Rule
+    -- This is organized to allow quickly "looking up" partially-instantiated
+    -- rules that can be applied to a given proposition.
   , partialRules :: Array Rule
   , queue :: Queue
   , comparePatch :: Patch -> Patch -> Ordering
@@ -123,6 +129,17 @@ _database = Proxy :: Proxy "database"
 _queue = Proxy :: Proxy "queue"
 _comparePatch = Proxy :: Proxy "comparePatch"
 _partialRules = Proxy :: Proxy "partialRules"
+
+{-
+TODO: When a partially instantiated rule is ruled, put it in the set of other
+partially instantiated rules, and put an ApplyPath in the queue with this rule
+so that it ends up using the best candidate to satisfy its next premise.
+
+TODO:IDEA: use "stop points" in rules that indicate when to stop and put in the
+queue, otherwise "keep going" and trying to satisfy the rest of the premises.
+This can defined purely in terms of the ordering over hte quwue, so that these
+rules are put at front of queue immediately.
+-}
 
 data Patch
   = ApplyPatch Rule
@@ -135,18 +152,11 @@ instance Pretty Patch where
   pretty (ApplyPatch rule) = "apply:" <\> indent (pretty rule)
   pretty (ConclusionPatch prop) = "conclude: " <> pretty prop
 
--- substitutePatch :: G.Sub -> Patch -> Patch
--- substitutePatch sigma (ConclusionPatch prop) = ConclusionPatch (assertI G.concreteProposition (G.substituteProposition sigma (G.toSymbolicProposition prop)))
--- substitutePatch sigma (ApplyPatch rule) = ApplyPatch (G.substituteRule sigma rule)
-
 getAllRules :: forall m. MonadEffect m => FixpointT m (Array Rule)
 getAllRules = do
   rules <- gets _.rules <#> Array.fromFoldable <<< Map.values
   partialRules <- gets _.partialRules
   pure $ rules <> partialRules
-
--- insertPartialRule :: forall m. MonadEffect m => PartialRule -> FixpointT m Unit
--- insertPartialRule partialRule = modify_ $ R.modify _partialRules (partialRule Array.: _)
 
 insertRule :: forall m. MonadEffect m => Rule -> FixpointT m Unit
 insertRule rule = modify_ $ R.modify _partialRules (rule Array.: _)

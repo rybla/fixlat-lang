@@ -15,7 +15,7 @@ import Data.Bifunctor (class Bifunctor, bimap, lmap, rmap)
 import Data.Either (Either(..))
 import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
-import Data.Lattice (class PartialOrd, comparePartial)
+import Data.Lattice (class Lattice, class PartialOrd, comparePartial)
 import Data.List (List(..), (:))
 import Data.List as List
 import Data.Make (class Make)
@@ -118,11 +118,11 @@ instance Pretty LatticeType where
     IntLatticeType -> "int"
     NatLatticeType -> "nat"
     StringLatticeType -> "string"
-    OpLatticeType lty -> "op" <> parens (pretty lty)
-    DiscreteLatticeType ty -> "discrete" <> parens (pretty ty)
-    TupleLatticeType LexicographicTupleOrdering lty1 lty2 -> parens (pretty lty1 <> ",[<] " <> pretty lty2)
-    TupleLatticeType ParallelTupleOrdering lty1 lty2 -> parens (pretty lty1 <> ",[|] " <> pretty lty2)
-    TupleLatticeType DiscreteTupleOrdering lty1 lty2 -> parens (pretty lty1 <> ",[=] " <> pretty lty2)
+    OpLatticeType lty -> "op" <+> parens (pretty lty)
+    DiscreteLatticeType dty -> "discrete" <+> parens (pretty dty)
+    TupleLatticeType LexicographicTupleOrdering lty1 lty2 -> parens (pretty lty1 <> ", " <> pretty lty2)
+    TupleLatticeType ParallelTupleOrdering lty1 lty2 -> parens (pretty lty1 <> "||" <> pretty lty2)
+    TupleLatticeType DiscreteTupleOrdering lty1 lty2 -> parens (pretty lty1 <> "&&" <> pretty lty2)
 
 data TupleOrdering
   = LexicographicTupleOrdering
@@ -393,11 +393,12 @@ instance Pretty Axiom where pretty (Axiom prop) = "axiom:" <+> pretty prop
 -- |     immediately-next hypothesis.
 
 data Rule
-  = PremiseRule SymbolicProposition Rule
-  | FilterRule SymbolicTerm Rule
+  = FilterRule SymbolicTerm Rule
   | QuantificationRule Quantification Rule
   | LetRule TermName SymbolicTerm Rule
+  | PremiseRule SymbolicProposition Rule
   | ConclusionRule SymbolicProposition
+  -- | DeferRule Rule
 
 derive instance Generic Rule _
 instance Show Rule where show x = genericShow x
@@ -480,8 +481,8 @@ emptyDatabaseSpec = DatabaseSpec
 -- | DatabaseSpec with the FixpointSpec of the DatabaseSpec's Terms and the given
 -- | Rules.
 newtype FixpointSpec = FixpointSpec 
-  { axiomNames :: Array AxiomName
-  , ruleNames :: Array RuleName
+  { axiomNames :: Maybe (Array AxiomName)
+  , ruleNames :: Maybe (Array RuleName)
   }
 
 derive instance Newtype FixpointSpec _

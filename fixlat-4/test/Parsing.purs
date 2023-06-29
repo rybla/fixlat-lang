@@ -151,9 +151,9 @@ makeModule grammar input = do
                 [
                   Tuple _db_fix $ FixpointSpec
                     {
-                      axiomNames: Array.fromFoldable $ Map.keys axioms
+                      axiomNames: Just $ Array.fromFoldable $ Map.keys axioms
                     ,
-                      ruleNames: Array.fromFoldable $ Map.keys rules
+                      ruleNames: Just $ Array.fromFoldable $ Map.keys rules
                     }
                 ]
             }

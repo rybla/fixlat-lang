@@ -251,8 +251,8 @@ makeModule graph = do
               fixpoints = Map.fromFoldable
                 [ 
                   Tuple _db_fix $ FixpointSpec 
-                    { axiomNames: Array.fromFoldable (Map.keys db_graph)
-                    , ruleNames: 
+                    { axiomNames: Just $ Array.fromFoldable (Map.keys db_graph)
+                    , ruleNames: Just $ 
                         [
                           -- _distance_transitivity, _distance_single_edge
                           _distance_edge

@@ -9,9 +9,11 @@ import Control.Monad.Reader (runReaderT)
 import Data.Array as Array
 import Data.Either (Either(..))
 import Data.Map as Map
+import Data.Maybe (Maybe(..))
 import Data.Newtype as Newtype
 import Data.Set as Set
 import Data.String.CodeUnits as CodeUnits
+import Effect (Effect)
 import Effect.Class.Console as Console
 import Hole (hole)
 import Language.Fixlat.Core.InternalFixpoint (emptyDatabase, fixpoint)
@@ -23,8 +25,7 @@ import Text.Pretty (pretty)
 --------------------------------------------------------------------------------
 
 data Dfa = Dfa
-  { states :: Array State
-  , startState :: State
+  { startState :: State
   , transitions :: Array Transition
   , acceptingStates :: Set.Set State }
 
@@ -106,11 +107,34 @@ reachable = do
   , make: \s -> Proposition name s
   }
 
+-- relation live[state]
+live :: _
+live = do
+  let name = Name "live" :: RelationName
+  let lattice = state.lattice
+  { name
+  , lattice
+  , data: toDataType lattice
+  , make: \s -> Proposition name s
+  }
+
 --------------------------------------------------------------------------------
 -- databases
 --------------------------------------------------------------------------------
-_db = Name "db" :: DatabaseSpecName
-_db_fix = Name "db_fix" :: FixpointSpecName
+_db_reachability = Name "db_reachability" :: DatabaseSpecName
+_fix_reachability = Name "fix_reachability" :: FixpointSpecName
+
+_db_live = Name "df_live" :: DatabaseSpecName
+_fix_live = Name "fix_live" :: FixpointSpecName
+
+--------------------------------------------------------------------------------
+-- rules
+--------------------------------------------------------------------------------
+
+_starting_reachable = Name "if a state is starting, then it is reachable" :: RuleName
+_transition_reachable = Name "if a state has a transition from a reachable state, then it is also reachable" :: RuleName
+_accepting_live = Name "if is a state is accepting, then it is live" :: RuleName
+_transition_live = Name "if a state has a transition to a live state, then it is also live" :: RuleName
 
 --------------------------------------------------------------------------------
 -- makeModule
@@ -129,10 +153,17 @@ makeModule (Dfa dfa) =
           starting.name /\ Relation starting.lattice
         ,
           reachable.name /\ Relation reachable.lattice
+        ,
+          live.name /\ Relation live.lattice
         ]
     , 
       axioms = Map.unions
         [
+          -- starting state
+          Map.singleton
+            (Name ("starting state"))
+            (Axiom (starting.make (state.lit dfa.startState)))
+        ,
           -- transition axioms
           Map.fromFoldable $
             flip Array.mapWithIndex dfa.transitions \i t ->
@@ -150,7 +181,7 @@ makeModule (Dfa dfa) =
         [
           Map.fromFoldable
             [ 
-              Tuple (Name "if a state is starting, then it is reachable")
+              Tuple _starting_reachable
               -- forall s: state.
               -- starting[s]
               -- |---
@@ -160,24 +191,70 @@ makeModule (Dfa dfa) =
               PremiseRule (starting.make (state.var s)) $
               ConclusionRule (reachable.make (state.var s))
             ,
-              Tuple (Name "if a state has a transition from a reachable state, then it is also reachable")
+              Tuple _transition_reachable
               -- forall s1: state
               -- reachable[s1]
               -- forall s2: state
               -- exists l: label
               -- transition[s1, s2, l]
               -- |---
-              -- reachable[s2]
+              -- reachable[s2] 
               let s1 = Name "s1" :: TermName in
               let s2 = Name "s2" :: TermName in
               let l = Name "l" :: TermName in
               QuantificationRule (Left (UniversalQuantification s1 state.lattice)) $
               PremiseRule (reachable.make (state.var s1)) $
               QuantificationRule (Left (UniversalQuantification s2 state.lattice)) $
+              -- TODO: make sure that exists is handled properly
               QuantificationRule (Right (ExistentialQuantification l label.lattice)) $
               PremiseRule (transition.make (state.var s1) (state.var s2) (label.var l)) $
               ConclusionRule (reachable.make (state.var s2))
+            ,
+              -- forall s: state
+              -- accepting[s]
+              -- |---
+              -- live[s]
+              Tuple _accepting_live
+              let s = Name "s" :: TermName in
+              QuantificationRule (Left (UniversalQuantification s state.lattice)) $
+              PremiseRule (accepting.make (state.var s)) $
+              ConclusionRule (live.make (state.var s))
+            ,
+              Tuple _transition_live
+              -- forall s2: state
+              -- live[s2]
+              -- forall s1: state
+              -- exists l: label
+              -- transition[s1, s2, l]
+              -- |---
+              -- live[s1]
+              let s1 = Name "s1" :: TermName in
+              let s2 = Name "s2" :: TermName in
+              let l = Name "l" :: TermName in
+              QuantificationRule (Left (UniversalQuantification s2 state.lattice)) $ 
+              PremiseRule (live.make (state.var s2)) $
+              QuantificationRule (Left (UniversalQuantification s1 state.lattice)) $
+              QuantificationRule (Right (ExistentialQuantification l label.lattice)) $
+              PremiseRule (transition.make (state.var s1) (state.var s2) (label.var l)) $
+              ConclusionRule (live.make (state.var s1))
             ]
+        ]
+    , 
+      databaseSpecs = Map.fromFoldable
+        [
+          Tuple _db_reachability $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
+            {
+              fixpoints = Map.singleton _fix_reachability $ FixpointSpec
+                { axiomNames: Nothing
+                , ruleNames: Just [_starting_reachable, _transition_reachable] }
+            }
+        ,
+          Tuple _db_live $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
+            {
+              fixpoints = Map.singleton _fix_live $ FixpointSpec
+                { axiomNames: Nothing
+                , ruleNames: Just [_accepting_live, _transition_live] }
+            }
         ]
     }
 
@@ -185,17 +262,46 @@ makeModule (Dfa dfa) =
 -- main
 --------------------------------------------------------------------------------
 
+main ∷ Effect Unit
 main = do
   Console.log "[DfaMinimization.main] Start"
 
   let 
-    ctx :: ModuleCtx
-    ctx = hole "ctx"
+    dfa = Dfa 
+      { startState: 0
+      , acceptingStates: Set.singleton 4
+      , transitions: 
+          [ {start: 0, end: 1, label: 'a'} 
+          , {start: 1, end: 2, label: 'a'} 
+          , {start: 2, end: 3, label: 'a'} 
+          , {start: 3, end: 4, label: 'a'}
 
-  let db = emptyDatabase
-  Console.log $ "[Parsing.main] Input database:" <> pretty db <> "\n"
-  db' <- runReaderT (runModuleT (fixpoint db _db _db_fix)) ctx
-  Console.log $ "[Parsing.main] Output database:" <> pretty db' <> "\n"
+          , {start: 10, end: 11, label: 'a'}
+          , {start: 12, end: 13, label: 'a'}
+          ]
+      }
+
+  let 
+    ctx :: ModuleCtx
+    ctx = 
+      { initial_gas: 1000
+      , module_: makeModule dfa
+      }
+
+  -- -- reachability
+  -- do
+  --   let db_reachability = emptyDatabase
+  --   Console.log $ "[Parsing.main] Input database:" <> pretty db_reachability <> "\n"
+  --   db_reachability' <- runReaderT (runModuleT (fixpoint db_reachability _db_reachability _fix_reachability)) ctx
+  --   Console.log $ "[Parsing.main] Output database:" <> pretty db_reachability' <> "\n"
+
+  -- live
+  do
+    let db_live = emptyDatabase
+    Console.log $ "[Parsing.main] Input database:" <> pretty db_live <> "\n"
+    db_live' <- runReaderT (runModuleT (fixpoint db_live _db_live _fix_live)) ctx
+    Console.log $ "[Parsing.main] Output database:" <> pretty db_live' <> "\n"
 
   Console.log "[DfaMinimization.main] Finish"
   pure unit
+

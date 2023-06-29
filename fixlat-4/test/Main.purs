@@ -30,8 +30,14 @@ import Effect.Class.Console as Console
 --   Console.log "[Test.Main.main]"
 --   Dijkstra.main
 
-import Test.Parsing as Parsing
+-- import Test.Parsing as Parsing
+-- main :: Effect Unit
+-- main = do
+--   Console.log "[Test.Main.main]"
+--   Parsing.main
+
+import Test.DfaMinimization as DfaMinimization
 main :: Effect Unit
 main = do
   Console.log "[Test.Main.main]"
-  Parsing.main
+  DfaMinimization.main
