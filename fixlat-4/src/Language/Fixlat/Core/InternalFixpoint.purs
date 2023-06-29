@@ -377,8 +377,8 @@ evaluateProposition (G.Proposition rel a) = do
   pure $ G.Proposition rel a'
 
 evaluateTerm :: forall m. MonadEffect m => G.ConcreteTerm -> FixpointT m G.ConcreteTerm
-evaluateTerm (G.NamedTerm x _) = absurd x
-evaluateTerm (G.NeutralTerm funName args _) = do
+evaluateTerm (G.VarTerm x _) = absurd x
+evaluateTerm (G.ApplicationTerm funName args _) = do
   moduleCtx <- lift getModuleCtx
   let G.FunctionSpec funSpec = assertI keyOfMap $ funName /\ (unwrap moduleCtx.module_).functionSpecs
   case funSpec.implementation of
@@ -387,6 +387,6 @@ evaluateTerm (G.NeutralTerm funName args _) = do
       args' <- evaluateTerm `traverse` args
       let term' = impl args'
       evaluateTerm term'
-evaluateTerm (G.PrimitiveTerm prim args ty) = do
+evaluateTerm (G.ConstructorTerm prim args ty) = do
   args' <- evaluateTerm `traverse` args
-  pure $ G.PrimitiveTerm prim args' ty
+  pure $ G.ConstructorTerm prim args' ty

@@ -74,10 +74,10 @@ unifyTerm term1 term2 | typeOfTerm term1 /= typeOfTerm term2 = do
   bug $ "In order to unify a symbolic term with a concrete term, they must have the same type. But, got expected type " <> ticks (pretty (typeOfTerm term1)) <> " and actual type " <> ticks (pretty (typeOfTerm term2)) <> ".\nWhile unifying " <> case ctx.initial of
     Left (expected /\ actual) -> ticks (pretty expected) <> " with " <> ticks (pretty actual)
     Right (expected /\ actual) -> ticks (pretty expected) <> " with " <> ticks (pretty actual)
-unifyTerm _ (NeutralTerm _ _ _) = bug $ "In order to unify a symbolic term with a concrete term, the concrete term must be fully simplified."
-unifyTerm _ (NamedTerm x _) = absurd x
-unifyTerm (NamedTerm x1 _) term2 = addSubstitution x1 term2
-unifyTerm (PrimitiveTerm p1 args1 _) (PrimitiveTerm p2 args2 _) | p1 == p2 =
+unifyTerm _ (ApplicationTerm _ _ _) = bug $ "In order to unify a symbolic term with a concrete term, the concrete term must be fully simplified."
+unifyTerm _ (VarTerm x _) = absurd x
+unifyTerm (VarTerm x1 _) term2 = addSubstitution x1 term2
+unifyTerm (ConstructorTerm p1 args1 _) (ConstructorTerm p2 args2 _) | p1 == p2 =
   for_ (args1 `Array.zip` args2) (uncurry unifyTerm)
 unifyTerm term1 term2 = throwError $ "Cannot unify " <> ticks (pretty term1) <> " with " <> ticks (pretty term2) <> "."
 

@@ -24,7 +24,7 @@ import Text.Pretty (pretty)
 
 -- term constructors
 
-lit_int x = PrimitiveTerm (IntPrimitive x) [] IntLatticeType
+lit_int x = ConstructorTerm (IntConstructor x) [] IntLatticeType
 
 -- rel1
 
@@ -47,10 +47,10 @@ _db1_fix1 = Name "db1_fix1" :: FixpointSpecName
 -- functions
 
 _fn_add = Name "add" :: FunctionName
-fn_add x y = NeutralTerm _fn_add [x, y] IntLatticeType
+fn_add x y = ApplicationTerm _fn_add [x, y] IntLatticeType
 
 _fn_lt = Name "lt" :: FunctionName
-fn_lt x y = NeutralTerm _fn_lt [x, y] BoolLatticeType
+fn_lt x y = ApplicationTerm _fn_lt [x, y] BoolLatticeType
 
 -- module
 
@@ -85,9 +85,9 @@ module_ = emptyModule # Newtype.over Module _
         Tuple _rel1_rule3 $
           HypothesisRule
             { quantifications: make [Left $ UniversalQuantification x rel1_domain]
-            , proposition: rel1 (NamedTerm x rel1_domain)
-            , filter: Just (fn_lt (NamedTerm x IntLatticeType) (lit_int 4)) } $ Right $
-          rel1 (fn_add (NamedTerm x IntLatticeType) (lit_int 1))
+            , proposition: rel1 (VarTerm x rel1_domain)
+            , filter: Just (fn_lt (VarTerm x IntLatticeType) (lit_int 4)) } $ Right $
+          rel1 (fn_add (VarTerm x IntLatticeType) (lit_int 1))
       ]
   , databaseSpecs = Map.fromFoldable
       [ Tuple _db1 $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
@@ -103,16 +103,16 @@ module_ = emptyModule # Newtype.over Module _
         Tuple _fn_add $ FunctionSpec
           { functionType: FunctionType [IntDataType, IntDataType] IntDataType
           , implementation: Just case _ of
-              [PrimitiveTerm (IntPrimitive x) [] lty, PrimitiveTerm (IntPrimitive y) [] _] -> PrimitiveTerm (IntPrimitive (x + y)) [] lty
+              [ConstructorTerm (IntConstructor x) [] lty, ConstructorTerm (IntConstructor y) [] _] -> ConstructorTerm (IntConstructor (x + y)) [] lty
               _ -> bug "invalid arguments to add"
           }
       ,
         Tuple _fn_lt $ FunctionSpec
           { functionType: FunctionType [IntDataType, IntDataType] IntDataType
           , implementation: Just case _ of
-              [PrimitiveTerm (IntPrimitive x) [] _, PrimitiveTerm (IntPrimitive y) [] _] -> 
+              [ConstructorTerm (IntConstructor x) [] _, ConstructorTerm (IntConstructor y) [] _] -> 
                 Debug.debug ("fn_lt.implemenation(" <> show x <> ", " <> show y <> ")") \_ -> 
-                PrimitiveTerm (BoolPrimitive (x < y)) [] BoolLatticeType
+                ConstructorTerm (BoolConstructor (x < y)) [] BoolLatticeType
               _ -> bug "invalid arguments to add"
           }
       ]

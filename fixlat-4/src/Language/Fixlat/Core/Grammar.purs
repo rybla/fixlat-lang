@@ -139,9 +139,9 @@ type SymbolicTerm = LatticeTerm TermName
 type ConcreteTerm = LatticeTerm Void
 type LatticeTerm = Term LatticeType
 data Term ty x
-  = NeutralTerm FunctionName (Array (Term ty x)) ty
-  | PrimitiveTerm Primitive (Array (Term ty x)) ty
-  | NamedTerm x ty
+  = ApplicationTerm FunctionName (Array (Term ty x)) ty
+  | ConstructorTerm Constructor (Array (Term ty x)) ty
+  | VarTerm x ty
 
 derive instance Generic (Term ty x) _
 instance (Show x, Show ty) => Show (Term ty x) where show x = genericShow x
@@ -150,54 +150,54 @@ derive instance Bifunctor Term
 
 instance Pretty (Term ty TermName) where
   pretty = case _ of
-    NeutralTerm fun tm _ -> pretty fun <> parens (pretty tm)
-    PrimitiveTerm prim [] _ -> pretty prim
-    PrimitiveTerm prim tms _ -> case prim /\ tms of
-      TuplePrimitive /\ [x, y] -> parens (pretty x <> ", " <> pretty y)
-      BoolPrimitive false /\ [] -> "false"
-      BoolPrimitive true /\ [] -> "true"
-      IntPrimitive x /\ [] -> show x
-      StringPrimitive s /\ [] -> show s
+    ApplicationTerm fun tm _ -> pretty fun <> parens (pretty tm)
+    ConstructorTerm prim [] _ -> pretty prim
+    ConstructorTerm prim tms _ -> case prim /\ tms of
+      TupleConstructor /\ [x, y] -> parens (pretty x <> ", " <> pretty y)
+      BoolConstructor false /\ [] -> "false"
+      BoolConstructor true /\ [] -> "true"
+      IntConstructor x /\ [] -> show x
+      StringConstructor s /\ [] -> show s
       _ -> pretty prim <> parens (pretty tms)
-    NamedTerm x _ -> pretty x
+    VarTerm x _ -> pretty x
 
 instance Pretty (Term ty Void) where pretty = pretty <<< toSymbolicTerm
 
 -- TODO: should this also be over SymbolicTerm?
 instance PartialOrd ConcreteTerm where
 
-  comparePartial term@(NeutralTerm _ _ _) _ = bug $ "In order to compare concrete terms, they must be fully simplified. However, you attempted to compare a neutral term " <> ticks (show term) <> "."
-  comparePartial _ term@(NeutralTerm _ _ _) = bug $ "In order to compare concrete terms, they must be fully simplified. However, you attempted to compare a neutral term " <> ticks (show term) <> "."
+  comparePartial term@(ApplicationTerm _ _ _) _ = bug $ "In order to compare concrete terms, they must be fully simplified. However, you attempted to compare a neutral term " <> ticks (show term) <> "."
+  comparePartial _ term@(ApplicationTerm _ _ _) = bug $ "In order to compare concrete terms, they must be fully simplified. However, you attempted to compare a neutral term " <> ticks (show term) <> "."
 
-  comparePartial (NamedTerm x _) _ = absurd x
-  comparePartial _ (NamedTerm x _) = absurd x
+  comparePartial (VarTerm x _) _ = absurd x
+  comparePartial _ (VarTerm x _) = absurd x
 
-  comparePartial (PrimitiveTerm p1 args1 _lty1) (PrimitiveTerm p2 args2 _lty2) =
+  comparePartial (ConstructorTerm p1 args1 _lty1) (ConstructorTerm p2 args2 _lty2) =
     assert equal (_lty1 /\ _lty2) case _ of
 
-      OpLatticeType lty' -> comparePartial (PrimitiveTerm p2 args2 lty') (PrimitiveTerm p1 args1 lty')
+      OpLatticeType lty' -> comparePartial (ConstructorTerm p2 args2 lty') (ConstructorTerm p1 args1 lty')
 
       DiscreteLatticeType _ -> if (p1 /\ args1) == (p2 /\ args2) then Just EQ else Nothing
 
       TupleLatticeType LexicographicTupleOrdering _ _ 
-        | (TuplePrimitive /\ [x1, y1]) /\ (TuplePrimitive /\ [x2, y2]) <- (p1 /\ args1) /\ (p2 /\ args2) ->
+        | (TupleConstructor /\ [x1, y1]) /\ (TupleConstructor /\ [x2, y2]) <- (p1 /\ args1) /\ (p2 /\ args2) ->
             case comparePartial x1 x2 of
               Just EQ -> comparePartial y1 y2
               mc -> mc
 
-      BoolLatticeType | (BoolPrimitive false /\ []) /\ (BoolPrimitive false /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
-      BoolLatticeType | (BoolPrimitive false /\ []) /\ (BoolPrimitive true /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just LT
-      BoolLatticeType | (BoolPrimitive true /\ []) /\ (BoolPrimitive false /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just GT
-      BoolLatticeType | (BoolPrimitive true /\ []) /\ (BoolPrimitive true /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
+      BoolLatticeType | (BoolConstructor false /\ []) /\ (BoolConstructor false /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
+      BoolLatticeType | (BoolConstructor false /\ []) /\ (BoolConstructor true /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just LT
+      BoolLatticeType | (BoolConstructor true /\ []) /\ (BoolConstructor false /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just GT
+      BoolLatticeType | (BoolConstructor true /\ []) /\ (BoolConstructor true /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
       
-      IntLatticeType | (IntPrimitive x1 /\ []) /\ (IntPrimitive x2 /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just (x1 `compare` x2)
+      IntLatticeType | (IntConstructor x1 /\ []) /\ (IntConstructor x2 /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just (x1 `compare` x2)
       
-      NatLatticeType | (ZeroPrimitive /\ []) /\ (ZeroPrimitive /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
-      NatLatticeType | (ZeroPrimitive /\ []) /\ (SucPrimitive /\ [_]) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just LT
-      NatLatticeType | (SucPrimitive /\ [_]) /\ (ZeroPrimitive /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just GT
-      NatLatticeType | (SucPrimitive /\ [x1]) /\ (SucPrimitive /\ [x2]) <- (p1 /\ args1) /\ (p2 /\ args2) -> comparePartial x1 x2
+      NatLatticeType | (ZeroConstructor /\ []) /\ (ZeroConstructor /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
+      NatLatticeType | (ZeroConstructor /\ []) /\ (SucConstructor /\ [_]) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just LT
+      NatLatticeType | (SucConstructor /\ [_]) /\ (ZeroConstructor /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just GT
+      NatLatticeType | (SucConstructor /\ [x1]) /\ (SucConstructor /\ [x2]) <- (p1 /\ args1) /\ (p2 /\ args2) -> comparePartial x1 x2
 
-      StringLatticeType | (StringPrimitive s1 /\ []) /\ (StringPrimitive s2 /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just (s1 `compare` s2)
+      StringLatticeType | (StringConstructor s1 /\ []) /\ (StringConstructor s2 /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just (s1 `compare` s2)
 
       lty -> bug $
         "[comparePartial] Unexpected term form:\n" <> bullets
@@ -206,40 +206,40 @@ instance PartialOrd ConcreteTerm where
           , "(p2 /\\ args2) = " <> ticks (pretty p2 <> parens (pretty args2)) ]
 
 typeOfTerm :: forall ty x. Term ty x -> ty
-typeOfTerm (NeutralTerm _ _ ty) = ty
-typeOfTerm (PrimitiveTerm _ _ ty) = ty
-typeOfTerm (NamedTerm _ ty) = ty
+typeOfTerm (ApplicationTerm _ _ ty) = ty
+typeOfTerm (ConstructorTerm _ _ ty) = ty
+typeOfTerm (VarTerm _ ty) = ty
 
-data Primitive 
-  = ZeroPrimitive
-  | SucPrimitive
-  | TuplePrimitive
-  | IntPrimitive Int
-  | StringPrimitive String
-  | BoolPrimitive Boolean
+data Constructor 
+  = ZeroConstructor
+  | SucConstructor
+  | TupleConstructor
+  | IntConstructor Int
+  | StringConstructor String
+  | BoolConstructor Boolean
 
-derive instance Generic Primitive _
-instance Show Primitive where show x = genericShow x
-derive instance Eq Primitive
-derive instance Ord Primitive
+derive instance Generic Constructor _
+instance Show Constructor where show x = genericShow x
+derive instance Eq Constructor
+derive instance Ord Constructor
 
-instance Pretty Primitive where 
+instance Pretty Constructor where 
   pretty = case _ of
-    ZeroPrimitive -> "zero"
-    SucPrimitive -> "suc"
-    TuplePrimitive -> "tuple"
-    IntPrimitive x -> show x
-    BoolPrimitive x -> show x
-    StringPrimitive x -> show x
+    ZeroConstructor -> "zero"
+    SucConstructor -> "suc"
+    TupleConstructor -> "tuple"
+    IntConstructor x -> show x
+    BoolConstructor x -> show x
+    StringConstructor x -> show x
 
 type Sub = Map.Map TermName ConcreteTerm
 
 substituteTerm :: Sub -> SymbolicTerm -> SymbolicTerm
-substituteTerm sigma (NeutralTerm fun tms ty) = NeutralTerm fun (substituteTerm sigma <$> tms) ty
-substituteTerm sigma (PrimitiveTerm prim tms ty) = PrimitiveTerm prim (substituteTerm sigma <$> tms) ty
-substituteTerm sigma (NamedTerm x ty) = case Map.lookup x sigma of
+substituteTerm sigma (ApplicationTerm fun tms ty) = ApplicationTerm fun (substituteTerm sigma <$> tms) ty
+substituteTerm sigma (ConstructorTerm prim tms ty) = ConstructorTerm prim (substituteTerm sigma <$> tms) ty
+substituteTerm sigma (VarTerm x ty) = case Map.lookup x sigma of
   Just tm -> toSymbolicTerm tm
-  Nothing -> NamedTerm x ty
+  Nothing -> VarTerm x ty
 
 concreteTerm :: Assertion SymbolicTerm ConcreteTerm
 concreteTerm = 
@@ -249,18 +249,18 @@ concreteTerm =
 
 checkConcreteTerm :: SymbolicTerm -> Either String ConcreteTerm
 checkConcreteTerm = case _ of
-  NeutralTerm fun tms ty -> NeutralTerm fun <$> checkConcreteTerm `traverse` tms <*> pure ty
-  PrimitiveTerm prim tms ty -> PrimitiveTerm prim <$> traverse checkConcreteTerm tms <*> pure ty
-  term@(NamedTerm _ _) -> Left $ "Term " <> ticks (show term) <> " is not concrete."
+  ApplicationTerm fun tms ty -> ApplicationTerm fun <$> checkConcreteTerm `traverse` tms <*> pure ty
+  ConstructorTerm prim tms ty -> ConstructorTerm prim <$> traverse checkConcreteTerm tms <*> pure ty
+  term@(VarTerm _ _) -> Left $ "Term " <> ticks (show term) <> " is not concrete."
 
 toSymbolicTerm :: forall ty. Term ty Void -> Term ty TermName
 toSymbolicTerm = rmap absurd
 
 trueTerm :: forall x. Term LatticeType x
-trueTerm = PrimitiveTerm (BoolPrimitive true) [] BoolLatticeType
+trueTerm = ConstructorTerm (BoolConstructor true) [] BoolLatticeType
 
 falseTerm :: forall x. Term LatticeType x
-falseTerm = PrimitiveTerm (BoolPrimitive false) [] BoolLatticeType
+falseTerm = ConstructorTerm (BoolConstructor false) [] BoolLatticeType
 
 --------------------------------------------------------------------------------
 -- Function

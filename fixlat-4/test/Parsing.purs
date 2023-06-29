@@ -30,13 +30,13 @@ tupleLex = TupleLatticeType LexicographicTupleOrdering
 
 lty_index = IntLatticeType
 dty_index = IntDataType
-lit_index i = PrimitiveTerm (IntPrimitive i) [] lty_index
-var_index x = NamedTerm x lty_index
+lit_index i = ConstructorTerm (IntConstructor i) [] lty_index
+var_index x = VarTerm x lty_index
 
 lty_symbol = StringLatticeType
 dty_symbol = StringDataType
-lit_symbol c = PrimitiveTerm (StringPrimitive (CodeUnits.singleton c)) [] lty_symbol
-var_symbol x = NamedTerm x lty_symbol
+lit_symbol c = ConstructorTerm (StringConstructor (CodeUnits.singleton c)) [] lty_symbol
+var_symbol x = VarTerm x lty_symbol
 
 {-
 Set : DataType -> DataType
@@ -62,8 +62,8 @@ dty_parsed = (dty_index `TupleDataType` dty_index) `TupleDataType` dty_symbol
 
 parsed :: forall x. Term LatticeType x -> Term LatticeType x -> Term LatticeType x -> Proposition LatticeType x
 parsed i1 i2 c = Proposition _parsed $
-  PrimitiveTerm TuplePrimitive
-    [ PrimitiveTerm TuplePrimitive [i1, i2] 
+  ConstructorTerm TupleConstructor
+    [ ConstructorTerm TupleConstructor [i1, i2] 
         (lty_index `tupleLex` lty_index)
     , c ]
     lty_parsed

@@ -25,18 +25,18 @@ _add_n_suc = Name "add_n_suc" :: RuleName
 _db_add_zero = Name "db_add_zero" :: DatabaseSpecName
 _fix_main = Name "fix_main" :: FixpointSpecName
 
-zero = PrimitiveTerm ZeroPrimitive [] nat
-suc a = PrimitiveTerm SucPrimitive [a] nat
+zero = ConstructorTerm ZeroConstructor [] nat
+suc a = ConstructorTerm SucConstructor [a] nat
 
 lex = TupleLatticeType LexicographicTupleOrdering
 
 -- tuple2 :: forall ty x. Term ty x -> Term ty x -> ty -> Term ty x
-tuple2 a b = PrimitiveTerm TuplePrimitive [a, b]
+tuple2 a b = ConstructorTerm TupleConstructor [a, b]
 
 -- tuple3 :: forall x. LatticeTerm x -> LatticeTerm x -> LatticeTerm x -> LatticeTerm x
 tuple3 a b c = tuple2 a (tuple2 b c (nat `lex` nat)) (nat `lex` (nat `lex` nat))
 
-namedNat x = NamedTerm x nat
+namedNat x = VarTerm x nat
 
 nat = NatLatticeType
 

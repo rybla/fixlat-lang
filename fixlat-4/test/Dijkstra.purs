@@ -29,20 +29,20 @@ lex = TupleLatticeType LexicographicTupleOrdering
 -- op = OpLatticeType
 -- int = IntLatticeType
 -- data_int = IntDataType
--- lit_int x = PrimitiveTerm (IntPrimitive x) [] int
--- var_int x = NamedTerm x int
--- var_op_int x = NamedTerm x (op int)
+-- lit_int x = ConstructorTerm (IntConstructor x) [] int
+-- var_int x = VarTerm x int
+-- var_op_int x = VarTerm x (op int)
 
 forAll = map (Left <<< uncurry UniversalQuantification)
 exists = map (Right <<< uncurry ExistentialQuantification)
 
 node = DiscreteLatticeType IntDataType :: LatticeType
-lit_node x = PrimitiveTerm (IntPrimitive x) [] node
-var_node x = NamedTerm x node
+lit_node x = ConstructorTerm (IntConstructor x) [] node
+var_node x = VarTerm x node
 
 weight = OpLatticeType IntLatticeType :: LatticeType
-lit_weight x = PrimitiveTerm (IntPrimitive x) [] weight
-var_weight x = NamedTerm x weight
+lit_weight x = ConstructorTerm (IntConstructor x) [] weight
+var_weight x = VarTerm x weight
 
 -- distance
 
@@ -53,8 +53,8 @@ distance_type = (node `lex` node) `lex` weight
 
 distance :: forall x. Term LatticeType x → Term LatticeType x → Term LatticeType x → Proposition LatticeType x
 distance n1 n2 w = Proposition _distance $
-  PrimitiveTerm TuplePrimitive 
-    [ PrimitiveTerm TuplePrimitive [n1, n2] (node `lex` node)
+  ConstructorTerm TupleConstructor 
+    [ ConstructorTerm TupleConstructor [n1, n2] (node `lex` node)
     , w ] 
     distance_type
 
@@ -67,15 +67,15 @@ edge_type = (node `lex` node) `lex` weight
 
 edge :: forall x. Term LatticeType x → Term LatticeType x → Term LatticeType x → Proposition LatticeType x
 edge n1 n2 w = Proposition _edge $
-  PrimitiveTerm TuplePrimitive 
-    [ PrimitiveTerm TuplePrimitive [n1, n2] (node `lex` node)
+  ConstructorTerm TupleConstructor 
+    [ ConstructorTerm TupleConstructor [n1, n2] (node `lex` node)
     , w ]
     edge_type
 
 -- add
 
 _add = Name "add" :: FunctionName
-add x y ty = NeutralTerm _add [x, y] ty
+add x y ty = ApplicationTerm _add [x, y] ty
 add_weight x y = add x y weight
 
 -- db
@@ -120,10 +120,10 @@ makeModule graph = do
           Tuple _add $ FunctionSpec
             { functionType: FunctionType [IntDataType, IntDataType] IntDataType
             , implementation: Just case _ of
-                [ PrimitiveTerm (IntPrimitive x1) [] lty1
-                , PrimitiveTerm (IntPrimitive x2) [] lty2 ] 
+                [ ConstructorTerm (IntConstructor x1) [] lty1
+                , ConstructorTerm (IntConstructor x2) [] lty2 ] 
                 | lty1 == lty2 -> 
-                  PrimitiveTerm (IntPrimitive (x1 + x2)) [] lty1
+                  ConstructorTerm (IntConstructor (x1 + x2)) [] lty1
                 _ -> bug $ "invalid arguments to " <> ticks (pretty _add)
             }
         ]
