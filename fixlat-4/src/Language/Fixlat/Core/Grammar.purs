@@ -402,29 +402,6 @@ substituteRule sigma (QuantificationRule quant rule) = QuantificationRule quant 
 substituteRule sigma (LetRule name term rule) = LetRule name (substituteTerm sigma term) (substituteRule sigma rule)
 substituteRule sigma (ConclusionRule prop) = ConclusionRule (substituteProposition sigma prop)
 
--- substituteRule sigma (PremiseRule hyp conc) = 
---   PremiseRule
---     hyp 
---       { proposition = substituteProposition sigma hyp.proposition
---       , filter = substituteTerm sigma <$> hyp.filter }
---     (bimap (substituteRule sigma) (substituteProposition sigma) conc)
-
--- TODO: probably dont actually need Quantifications
-
--- -- | `Quantifications` is an alternating list of sets of universal/existential
--- -- | quantifications. Each group is a set since the ordering among universals or
--- -- | existentials doesn't matter.
--- newtype Quantifications = Quantifications
---   (List 
---     ( (Set UniversalQuantification) \/
---       (Set ExistentialQuantification) ))
-
--- derive instance Newtype Quantifications _
--- derive newtype instance Show Quantifications
--- derive newtype instance Eq Quantifications
-
--- instance Pretty Quantifications where pretty (Quantifications quants) = pretty quants
-
 type Quantification = UniversalQuantification \/ ExistentialQuantification
 
 data UniversalQuantification = UniversalQuantification TermName LatticeType
@@ -444,21 +421,6 @@ derive instance Eq ExistentialQuantification
 derive instance Ord ExistentialQuantification
 
 instance Pretty ExistentialQuantification where pretty (ExistentialQuantification x ty) = "∃" <> parens (pretty x <> ":" <+> pretty ty)
-
--- instance Make Quantifications (Array (Either UniversalQuantification ExistentialQuantification)) where
---   make = Array.uncons >>> case _ of
---     Nothing -> Quantifications Nil
---     Just {head: q, tail: qs} -> case q of
---       Left uq -> Quantifications (go (Left (Set.singleton uq)) qs)
---       Right eq -> Quantifications (go (Right (Set.singleton eq)) qs)
---     where
---     go :: (Set.Set UniversalQuantification \/ Set.Set ExistentialQuantification) -> Array (Either UniversalQuantification ExistentialQuantification) -> List (Set UniversalQuantification \/ Set ExistentialQuantification)
---     go qset = Array.uncons >>> case _ of
---       Nothing -> List.singleton qset
---       Just {head: q, tail: qs} -> case qset /\ q of
---         Left uqset /\ Left uq -> go (Left (Set.insert uq uqset)) qs
---         Right eqset /\ Right eq -> go (Right (Set.insert eq eqset)) qs
---         _ -> go (bimap Set.singleton Set.singleton q) qs <> List.singleton qset
 
 --------------------------------------------------------------------------------
 -- Database
