@@ -1,5 +1,6 @@
 module Test.Example1 where
 
+{-
 import Data.Tuple.Nested
 import Language.Fixlat.Core.Grammar
 import Prelude
@@ -129,3 +130,4 @@ main = do
   db' <- runReaderT (runModuleT m) ctx
   Console.log $ "\nOutput database:\n" <> pretty db' <> "\n"
   pure unit
+-}

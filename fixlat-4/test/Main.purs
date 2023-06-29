@@ -24,14 +24,14 @@ import Effect.Class.Console as Console
 --   Console.log "[Test.Main.main]"
 --   Add.main
 
-import Test.Dijkstra as Dijkstra
-main :: Effect Unit
-main = do
-  Console.log "[Test.Main.main]"
-  Dijkstra.main
-
--- import Test.Parsing as Parsing
+-- import Test.Dijkstra as Dijkstra
 -- main :: Effect Unit
 -- main = do
 --   Console.log "[Test.Main.main]"
---   Parsing.main
+--   Dijkstra.main
+
+import Test.Parsing as Parsing
+main :: Effect Unit
+main = do
+  Console.log "[Test.Main.main]"
+  Parsing.main

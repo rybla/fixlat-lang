@@ -68,18 +68,27 @@ module_ = emptyModule # Newtype.over Module _
           z = Name "z"
         in
         Tuple _add_n_suc $
-        HypothesisRule
-          { -- forall (x y z : Nat)
-            quantifications: make
-                [ Left $ UniversalQuantification x nat
-                , Left $ UniversalQuantification y nat
-                , Left $ UniversalQuantification z nat ]
-            -- x + y = z
-          , proposition: add (tuple3 (namedNat x) (namedNat y) (namedNat z))
-          , filter: Nothing } $
+        -- HypothesisRule
+        --   { -- forall (x y z : Nat)
+        --     quantifications: make
+        --         [ Left $ UniversalQuantification x nat
+        --         , Left $ UniversalQuantification y nat
+        --         , Left $ UniversalQuantification z nat ]
+        --     -- x + y = z
+        --   , proposition: add (tuple3 (namedNat x) (namedNat y) (namedNat z))
+        --   , filter: Nothing } $
           -- ------------------------
           -- x + suc y = suc z
-          Right $ add (tuple3 (namedNat x) (suc (namedNat y)) (suc (namedNat z)))
+        --   Right $ add (tuple3 (namedNat x) (suc (namedNat y)) (suc (namedNat z)))
+        
+        -- forall (x y z : Nat)
+        QuantificationRule (Left (UniversalQuantification x nat)) $
+        QuantificationRule (Left (UniversalQuantification y nat)) $
+        QuantificationRule (Left (UniversalQuantification z nat)) $
+        PremiseRule (add (tuple3 (namedNat x) (namedNat y) (namedNat z))) $
+        -- ------------------------
+        -- x + suc y = suc z
+        ConclusionRule (add (tuple3 (namedNat x) (suc (namedNat y)) (suc (namedNat z))))
       ]
   , databaseSpecs = Map.fromFoldable
       [ Tuple _db_add_zero $ emptyDatabaseSpec # Newtype.over DatabaseSpec _

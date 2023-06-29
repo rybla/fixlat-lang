@@ -35,13 +35,12 @@ liftUnifyT = lift >>> lift >>> lift
 -- universal and existential quantifiers matters. Not exactly sure what data
 -- structure to use
 type Ctx = 
-  { initial :: (SymbolicProposition /\ ConcreteProposition) \/ (SymbolicTerm /\ ConcreteTerm)
-  , quantifications :: Quantifications }
+  { initial :: (SymbolicProposition /\ ConcreteProposition) \/ (SymbolicTerm /\ ConcreteTerm) }
 
-type Sub = Map.Map TermName ConcreteTerm
+type TypingContext = Map.Map TermName Type
 
-unify :: forall m. Monad m => Quantifications -> (SymbolicProposition /\ ConcreteProposition) \/ (SymbolicTerm /\ ConcreteTerm) -> ModuleT m (String \/ Sub)
-unify quantifications initial = map snd <$> runUnifyT {quantifications, initial} do
+unify :: forall m. Monad m => (SymbolicProposition /\ ConcreteProposition) \/ (SymbolicTerm /\ ConcreteTerm) -> ModuleT m (String \/ Sub)
+unify initial = map snd <$> runUnifyT {initial} do
   case initial of
     Left (expected /\ actual) -> unifyProposition expected actual
     Right (expected /\ actual) -> unifyTerm expected actual
@@ -71,8 +70,8 @@ unifyProposition (Proposition rel1 arg1) (Proposition rel2 arg2)
 -- | with candidate.
 unifyTerm :: forall m. Monad m => SymbolicTerm -> ConcreteTerm -> UnifyT m Unit
 unifyTerm term1 term2 | typeOfTerm term1 /= typeOfTerm term2 = do
-  env <- ask
-  bug $ "In order to unify a symbolic term with a concrete term, they must have the same type. But, got expected type " <> ticks (pretty (typeOfTerm term1)) <> " and actual type " <> ticks (pretty (typeOfTerm term2)) <> ".\nWhile unifying " <> case env.initial of
+  ctx <- ask
+  bug $ "In order to unify a symbolic term with a concrete term, they must have the same type. But, got expected type " <> ticks (pretty (typeOfTerm term1)) <> " and actual type " <> ticks (pretty (typeOfTerm term2)) <> ".\nWhile unifying " <> case ctx.initial of
     Left (expected /\ actual) -> ticks (pretty expected) <> " with " <> ticks (pretty actual)
     Right (expected /\ actual) -> ticks (pretty expected) <> " with " <> ticks (pretty actual)
 unifyTerm _ (NeutralTerm _ _ _) = bug $ "In order to unify a symbolic term with a concrete term, the concrete term must be fully simplified."

@@ -15,9 +15,10 @@ import Data.Generic.Rep (class Generic)
 import Data.Lattice ((~?))
 import Data.List (List(..), (:))
 import Data.List as List
+import Data.Make (class Make, make)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
-import Data.Newtype (unwrap)
+import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.String as String
 import Data.Traversable (for, traverse)
@@ -32,6 +33,23 @@ import Language.Fixlat.Core.Unification (unify)
 import Record as R
 import Text.Pretty (class Pretty, bullets, indent, pretty, ticks, (<+>), (<\>))
 import Type.Proxy (Proxy(..))
+
+newtype Rule = Rule
+  { originalRule :: G.Rule
+  , quantifications :: Array G.Quantification
+  , rule :: G.Rule }
+
+instance Make Rule G.Rule where
+  make originalRule = Rule
+    { originalRule
+    , quantifications: []
+    , rule: originalRule }
+
+derive instance Newtype Rule _
+derive newtype instance Show Rule
+
+instance Pretty Rule where
+  pretty (Rule rule) = pretty rule.rule
 
 -- | Internal fixpoint implementation.
 fixpoint :: forall m. MonadEffect m => Database -> G.DatabaseSpecName -> G.FixpointSpecName -> ModuleT m Database
@@ -59,7 +77,8 @@ fixpoint (Database props) databaseSpecName fixpointSpecName = do
       , database: Database []
         -- only keep rules specified by fixpointSpec
       , rules: Map.filterWithKey 
-          (\ruleName _ -> ruleName `Array.elem` (unwrap fixpointSpec).ruleNames)
+          (\ruleName _ -> ruleName `Array.elem` (unwrap fixpointSpec).ruleNames) $
+          map make $
           (unwrap moduleCtx.module_).rules
       , partialRules: []
       , queue
@@ -94,8 +113,8 @@ type FixpointEnv =
   { initial_gas :: Int
   , gas :: Int
   , database :: Database
-  , rules :: Map.Map G.RuleName G.Rule
-  , partialRules :: Array G.Rule
+  , rules :: Map.Map G.RuleName Rule
+  , partialRules :: Array Rule
   , queue :: Queue
   , comparePatch :: Patch -> Patch -> Ordering
   }
@@ -106,8 +125,8 @@ _comparePatch = Proxy :: Proxy "comparePatch"
 _partialRules = Proxy :: Proxy "partialRules"
 
 data Patch
-  = ApplyPatch G.Rule
-  | ConclusionPatch G.ConcreteProposition -- conclusion proposition
+  = ApplyPatch Rule
+  | ConclusionPatch G.ConcreteProposition
 
 derive instance Generic Patch _
 instance Show Patch where show x = genericShow x
@@ -116,18 +135,21 @@ instance Pretty Patch where
   pretty (ApplyPatch rule) = "apply:" <\> indent (pretty rule)
   pretty (ConclusionPatch prop) = "conclude: " <> pretty prop
 
-substitutePatch :: Map.Map G.TermName G.SymbolicTerm -> Patch -> Patch
-substitutePatch sigma (ConclusionPatch prop) = ConclusionPatch (assertI G.concreteProposition (G.substituteProposition sigma (G.toSymbolicProposition prop)))
-substitutePatch sigma (ApplyPatch rule) = ApplyPatch (G.substituteRule sigma rule)
+-- substitutePatch :: G.Sub -> Patch -> Patch
+-- substitutePatch sigma (ConclusionPatch prop) = ConclusionPatch (assertI G.concreteProposition (G.substituteProposition sigma (G.toSymbolicProposition prop)))
+-- substitutePatch sigma (ApplyPatch rule) = ApplyPatch (G.substituteRule sigma rule)
 
-getAllRules :: forall m. MonadEffect m => FixpointT m (Array G.Rule)
+getAllRules :: forall m. MonadEffect m => FixpointT m (Array Rule)
 getAllRules = do
   rules <- gets _.rules <#> Array.fromFoldable <<< Map.values
   partialRules <- gets _.partialRules
   pure $ rules <> partialRules
 
-insertPartialRule :: forall m. MonadEffect m => G.Rule -> FixpointT m Unit
-insertPartialRule rule = modify_ $ R.modify _partialRules (rule Array.: _)
+-- insertPartialRule :: forall m. MonadEffect m => PartialRule -> FixpointT m Unit
+-- insertPartialRule partialRule = modify_ $ R.modify _partialRules (partialRule Array.: _)
+
+insertRule :: forall m. MonadEffect m => Rule -> FixpointT m Unit
+insertRule rule = modify_ $ R.modify _partialRules (rule Array.: _)
 
 --------------------------------------------------------------------------------
 -- loop
@@ -265,45 +287,54 @@ learn (ConclusionPatch _prop) = do
     
 learn (ApplyPatch rule) = do
   -- TODO: here I add the rule to the database, which is necessary if there are
-  -- hypotheses for this apply patch that could be learned later. Alternatively,
+  -- premises for this apply patch that could be learned later. Alternatively,
   -- you could order the queue such that conclusions are processed before
   -- applications.
-  insertPartialRule rule
+  insertRule rule
 
   -- For each candidate proposition in the database
   candidates <- getCandidates
   Array.concat <$> for candidates \candidate -> do
     applyRule rule candidate
 
-appleRuleAsPatch :: forall m. MonadEffect m => G.Rule -> FixpointT m Patch
-appleRuleAsPatch rule = pure $ ApplyPatch rule
-
-applyRule :: forall m. MonadEffect m => G.Rule -> G.ConcreteProposition -> FixpointT m (Array Patch)
-applyRule (G.HypothesisRule hyp conc) prop = do
-  liftFixpointT (unify hyp.quantifications (Left (hyp.proposition /\ prop))) >>= case _ of
-    Left _err -> do
-      -- not unifiable, so ignore candidate
-      pure []
-    Right _sigma -> do
-      let sigma = G.toSymbolicTerm <$> _sigma
-      -- apply sigma to condition
-      let filter' = hyp.filter <#> \condition -> assertI G.concreteTerm $ G.substituteTerm sigma condition
-      -- check condition
-      check <- do
-        case filter' of
-          Nothing -> pure true
-          Just condition -> checkCondition condition
-      if not check 
-        then pure [] 
-        else do
-          let patch = case conc of
-                Right prop' -> ConclusionPatch $ assertI G.concreteProposition $ G.substituteProposition sigma prop'
-                Left rule' -> ApplyPatch $ G.substituteRule sigma rule'
-          let conclusion' = substitutePatch sigma patch
-          -- check subsumption
-          isSubsumed conclusion' >>= case _ of
-            true -> pure []
-            false -> pure [conclusion']
+applyRule :: forall m. MonadEffect m => Rule -> G.ConcreteProposition -> FixpointT m (Array Patch)
+applyRule (Rule _rule) prop' = case _rule.rule of
+  G.FilterRule _ _ -> bug $ "[applyRule] Cannot apply a rule that starts with a filter: " <> pretty (Rule _rule)
+  G.ConclusionRule _ -> bug $ "[applyRule] Cannot apply a rule that starts with a conclusion: " <> pretty (Rule _rule)
+  G.QuantificationRule quant rule ->
+    applyRule 
+      (Rule _rule 
+        { quantifications = Array.snoc _rule.quantifications quant
+        , rule = rule }) 
+      prop'
+  G.LetRule name term rule -> do
+    term' <- evaluateTerm $ assertI G.concreteTerm term
+    applyRule 
+      (Rule _rule
+        { rule = G.substituteRule (Map.singleton name term') rule })
+      prop'
+  G.PremiseRule prem rule ->
+    -- does the premise unify with the candidate?
+    liftFixpointT (unify (Left (prem /\ prop'))) >>= case _ of
+      Left _err -> pure []
+      Right sigma -> go (Rule _rule {rule = G.substituteRule sigma rule})
+        where
+        go (Rule _rule'@{rule: G.QuantificationRule quant rule'}) = 
+          go (Rule _rule'
+            { quantifications = Array.snoc _rule.quantifications quant
+            , rule = rule' }) 
+        go (Rule _rule'@{rule: G.LetRule name term rule'}) = do
+          term' <- evaluateTerm $ assertI G.concreteTerm term
+          go (Rule _rule'
+            { rule = G.substituteRule (Map.singleton name term') rule' })
+        go (Rule _rule'@{rule: G.FilterRule cond rule''}) =
+          checkCondition (assertI G.concreteTerm $ G.substituteTerm sigma cond) >>= if _
+            then pure [ApplyPatch (Rule _rule' {rule = rule''})]
+            else pure []
+        go (Rule _rule'@{rule: G.ConclusionRule conc}) = do
+          let conc' = assertI G.concreteProposition conc
+          pure [ConclusionPatch conc']
+        go _rule' = pure [ApplyPatch _rule']
 
 checkCondition :: forall m. MonadEffect m => G.ConcreteTerm -> FixpointT m Boolean
 checkCondition term = do
@@ -316,7 +347,7 @@ checkCondition term = do
 --------------------------------------------------------------------------------
 
 isSubsumed :: forall m. MonadEffect m => Patch -> FixpointT m Boolean
-isSubsumed (ApplyPatch _rule) = do
+isSubsumed (ApplyPatch rule) = do
   -- TODO: should apply-patches be able to be subsumed? maybe not?
   pure false
 isSubsumed (ConclusionPatch prop) = do

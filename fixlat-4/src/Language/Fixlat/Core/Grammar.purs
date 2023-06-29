@@ -232,11 +232,13 @@ instance Pretty Primitive where
     BoolPrimitive x -> show x
     StringPrimitive x -> show x
 
-substituteTerm :: Map.Map TermName SymbolicTerm -> SymbolicTerm -> SymbolicTerm
+type Sub = Map.Map TermName ConcreteTerm
+
+substituteTerm :: Sub -> SymbolicTerm -> SymbolicTerm
 substituteTerm sigma (NeutralTerm fun tms ty) = NeutralTerm fun (substituteTerm sigma <$> tms) ty
 substituteTerm sigma (PrimitiveTerm prim tms ty) = PrimitiveTerm prim (substituteTerm sigma <$> tms) ty
 substituteTerm sigma (NamedTerm x ty) = case Map.lookup x sigma of
-  Just tm -> tm
+  Just tm -> toSymbolicTerm tm
   Nothing -> NamedTerm x ty
 
 concreteTerm :: Assertion SymbolicTerm ConcreteTerm
@@ -315,7 +317,7 @@ derive instance Bifunctor Proposition
 instance Pretty (Proposition ty TermName) where pretty (Proposition rel tm) = pretty rel <> brackets (pretty tm)
 instance Pretty (Proposition ty Void) where pretty = pretty <<< toSymbolicProposition
 
-substituteProposition :: Map.Map TermName SymbolicTerm -> SymbolicProposition -> SymbolicProposition
+substituteProposition :: Sub -> SymbolicProposition -> SymbolicProposition
 substituteProposition sigma (Proposition rel arg) = Proposition rel (substituteTerm sigma arg)
 
 concreteProposition :: Assertion SymbolicProposition ConcreteProposition
@@ -350,7 +352,7 @@ instance Pretty Axiom where pretty (Axiom prop) = "axiom:" <+> pretty prop
 -- | An derivation Rule for deriving propositions of a Relation. A Rule is built
 -- | as a nested structure where each layer is one of the following:
 -- |   - Quantifications, which are introduced into scope for the nested Rule
--- |   - Hypothesis proposition
+-- |   - Premise proposition
 -- |   - Filter
 -- |
 -- | Finally, the last layer is the conclusion proposition.
@@ -362,78 +364,68 @@ instance Pretty Axiom where pretty (Axiom prop) = "axiom:" <+> pretty prop
 -- |     conclusion.
 -- |   - Each universally-quantified variable must be used in the
 -- |     immediately-next hypothesis.
-data Rule
-  = HypothesisRule
-      RuleHypothesis
-      (Rule \/ SymbolicProposition)
-  -- TODO: something like: | LetRule Binding Rule
 
-type RuleHypothesis = 
-  { quantifications :: Quantifications
-  , proposition :: SymbolicProposition
-  , filter :: Maybe SymbolicTerm
-  }
+data Rule
+  = PremiseRule SymbolicProposition Rule
+  | FilterRule SymbolicTerm Rule
+  | QuantificationRule Quantification Rule
+  | LetRule TermName SymbolicTerm Rule
+  | ConclusionRule SymbolicProposition
 
 derive instance Generic Rule _
 instance Show Rule where show x = genericShow x
 
-instance Pretty Rule where 
-  -- pretty (HypothesisRule hyp conc) = lines
-  --   [ "rule:"
-  --   , indent $ lines
-  --       [ "hypothesis:\n" <> (indent (lines
-  --           [ "quantifications:" <+> pretty hyp.quantifications
-  --           , "proposition:" <+> pretty hyp.proposition
-  --           , "filter:" <+> pretty hyp.filter
-  --           ]))
-  --       , "conclusion:\n" <> indent (pretty conc) ] ]
-  pretty (HypothesisRule _hyp _conc) = do
-    let
-      go' :: Array String -> RuleHypothesis -> Rule \/ SymbolicProposition -> Array String /\ Array String
-      go' strs hyp conc = do
-        let strs' = Array.snoc strs $
-              "│ " <>
-              (case hyp.quantifications of
-                Quantifications Nil -> ""
-                qs -> pretty qs <> ". ") <>
-              pretty hyp.proposition <>
-              maybe "" (\cond -> " such that " <> pretty cond) hyp.filter
-        case conc of
-          Left (HypothesisRule hyp' conc') -> go' strs' hyp' conc'
-          Right prop -> strs' /\ ["│ " <> pretty prop]
+instance Pretty Rule where
+  pretty _rule = "╭\n" <> lines [lines strs1, hline, lines strs2] <> "\n╰ "
+    where
+    go :: Array String -> Rule -> Array String /\ Array String
+    go strs (FilterRule term rule) = go (Array.snoc strs $ "│ if " <> pretty term) rule
+    go strs (PremiseRule prop rule) = go (Array.snoc strs $ "│ " <> pretty prop) rule
+    go strs (QuantificationRule quant rule) = go (Array.snoc strs $ "│ " <> pretty quant) rule
+    go strs (LetRule name term rule) = go (Array.snoc strs $ "│ let " <> pretty name <> " = " <> pretty term) rule
+    go strs (ConclusionRule prop) = strs /\ ["│ " <> pretty prop]
 
-      strs1 /\ strs2 = go' [] _hyp _conc
-      max_length = assertI just $ maximum (String.length <$> strs1 <> strs2)
-      padding_right = 4
-      hline = "├" <> (String.fromCodePointArray (Array.replicate (max_length + padding_right) (String.codePointFromChar '─')))
-    "╭\n" <> lines [lines strs1, hline, lines strs2] <> "\n╰ "
-      
+    strs1 /\ strs2 = go [] _rule
+    max_length = assertI just $ maximum (String.length <$> strs1 <> strs2)
+    padding_right = 4
+    hline = "├" <> (String.fromCodePointArray (Array.replicate (max_length + padding_right) (String.codePointFromChar '─')))
+
 
 instance Refined "Rule" Rule where
   -- TODO: encode requirements
   validate' = \_ -> pure unit
 
-substituteRule :: Map.Map TermName SymbolicTerm -> Rule -> Rule
-substituteRule sigma (HypothesisRule hyp conc) = 
-  HypothesisRule
-    hyp 
-      { proposition = substituteProposition sigma hyp.proposition
-      , filter = substituteTerm sigma <$> hyp.filter }
-    (bimap (substituteRule sigma) (substituteProposition sigma) conc)
+substituteRule :: Sub -> Rule -> Rule
+substituteRule sigma (PremiseRule prem rule) = PremiseRule (substituteProposition sigma prem) (substituteRule sigma rule)
+substituteRule sigma (FilterRule cond rule) = FilterRule (substituteTerm sigma cond) (substituteRule sigma rule)
+substituteRule sigma (QuantificationRule quant rule) = QuantificationRule quant (substituteRule sigma rule)
+substituteRule sigma (LetRule name term rule) = LetRule name (substituteTerm sigma term) (substituteRule sigma rule)
+substituteRule sigma (ConclusionRule prop) = ConclusionRule (substituteProposition sigma prop)
 
--- | `Quantifications` is an alternating list of sets of universal/existential
--- | quantifications. Each group is a set since the ordering among universals or
--- | existentials doesn't matter.
-newtype Quantifications = Quantifications
-  (List 
-    ( (Set UniversalQuantification) \/
-      (Set ExistentialQuantification) ))
+-- substituteRule sigma (PremiseRule hyp conc) = 
+--   PremiseRule
+--     hyp 
+--       { proposition = substituteProposition sigma hyp.proposition
+--       , filter = substituteTerm sigma <$> hyp.filter }
+--     (bimap (substituteRule sigma) (substituteProposition sigma) conc)
 
-derive instance Newtype Quantifications _
-derive newtype instance Show Quantifications
-derive newtype instance Eq Quantifications
+-- TODO: probably dont actually need Quantifications
 
-instance Pretty Quantifications where pretty (Quantifications quants) = pretty quants
+-- -- | `Quantifications` is an alternating list of sets of universal/existential
+-- -- | quantifications. Each group is a set since the ordering among universals or
+-- -- | existentials doesn't matter.
+-- newtype Quantifications = Quantifications
+--   (List 
+--     ( (Set UniversalQuantification) \/
+--       (Set ExistentialQuantification) ))
+
+-- derive instance Newtype Quantifications _
+-- derive newtype instance Show Quantifications
+-- derive newtype instance Eq Quantifications
+
+-- instance Pretty Quantifications where pretty (Quantifications quants) = pretty quants
+
+type Quantification = UniversalQuantification \/ ExistentialQuantification
 
 data UniversalQuantification = UniversalQuantification TermName LatticeType
 
@@ -453,20 +445,20 @@ derive instance Ord ExistentialQuantification
 
 instance Pretty ExistentialQuantification where pretty (ExistentialQuantification x ty) = "∃" <> parens (pretty x <> ":" <+> pretty ty)
 
-instance Make Quantifications (Array (Either UniversalQuantification ExistentialQuantification)) where
-  make = Array.uncons >>> case _ of
-    Nothing -> Quantifications Nil
-    Just {head: q, tail: qs} -> case q of
-      Left uq -> Quantifications (go (Left (Set.singleton uq)) qs)
-      Right eq -> Quantifications (go (Right (Set.singleton eq)) qs)
-    where
-    go :: (Set.Set UniversalQuantification \/ Set.Set ExistentialQuantification) -> Array (Either UniversalQuantification ExistentialQuantification) -> List (Set UniversalQuantification \/ Set ExistentialQuantification)
-    go qset = Array.uncons >>> case _ of
-      Nothing -> List.singleton qset
-      Just {head: q, tail: qs} -> case qset /\ q of
-        Left uqset /\ Left uq -> go (Left (Set.insert uq uqset)) qs
-        Right eqset /\ Right eq -> go (Right (Set.insert eq eqset)) qs
-        _ -> go (bimap Set.singleton Set.singleton q) qs <> List.singleton qset
+-- instance Make Quantifications (Array (Either UniversalQuantification ExistentialQuantification)) where
+--   make = Array.uncons >>> case _ of
+--     Nothing -> Quantifications Nil
+--     Just {head: q, tail: qs} -> case q of
+--       Left uq -> Quantifications (go (Left (Set.singleton uq)) qs)
+--       Right eq -> Quantifications (go (Right (Set.singleton eq)) qs)
+--     where
+--     go :: (Set.Set UniversalQuantification \/ Set.Set ExistentialQuantification) -> Array (Either UniversalQuantification ExistentialQuantification) -> List (Set UniversalQuantification \/ Set ExistentialQuantification)
+--     go qset = Array.uncons >>> case _ of
+--       Nothing -> List.singleton qset
+--       Just {head: q, tail: qs} -> case qset /\ q of
+--         Left uqset /\ Left uq -> go (Left (Set.insert uq uqset)) qs
+--         Right eqset /\ Right eq -> go (Right (Set.insert eq eqset)) qs
+--         _ -> go (bimap Set.singleton Set.singleton q) qs <> List.singleton qset
 
 --------------------------------------------------------------------------------
 -- Database

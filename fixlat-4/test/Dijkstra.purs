@@ -141,45 +141,46 @@ makeModule graph = do
     , 
       rules = Map.fromFoldable
         [ 
-          Tuple _distance_single_edge $
-          let 
-            a = Name "a" :: TermName
-            b = Name "b" :: TermName
-            w = Name "w" :: TermName
-          in
-          HypothesisRule
-            { quantifications: make (forAll [a /\ node, b /\ node, w /\ weight])
-            , proposition: edge (var_node a) (var_node b) (var_weight w)
-            , filter: Nothing } $ Right $
-          -- 
-          distance (var_node a) (var_node b) (var_weight w)
-        ,
-          -- ╭
-          -- │ ∀(a: discrete(int)), ∀(b: discrete(int)), ∀(v: op(int)). distance(tuple(tuple(a, b), v))
-          -- │ ∀(c: discrete(int)), ∀(w: op(int)). distance(tuple(tuple(b, c), w))
-          -- ├──────────────────────────────────────────────────────────────────────────────────────────────
-          -- │ distance(tuple(tuple(a, c), add(v, w)))
-          -- ╰ 
-          Tuple _distance_transitivity $
-          let
-            a = Name "a" :: TermName
-            b = Name "b" :: TermName
-            c = Name "c" :: TermName
-            v = Name "v" :: TermName
-            w = Name "w" :: TermName
-          in
-            HypothesisRule 
-              { quantifications: make (forAll [a /\ node, b /\ node, v /\ weight])
-              , proposition: distance (var_node a) (var_node b) (var_weight v)
-              , filter: Nothing }
-            $ Left $ -- ────────────────────────────────────────────────────────
-            HypothesisRule 
-              { quantifications: make (forAll [c /\ node, w /\ weight])
-              , proposition: distance (var_node b) (var_node c) (var_weight w)
-              , filter: Nothing } 
-            $ Right $ -- ───────────────────────────────────────────────────────
-            distance (var_node a) (var_node c) (add_weight (var_weight v) (var_weight w)) 
-        , 
+        --   Tuple _distance_single_edge $
+        --   let 
+        --     a = Name "a" :: TermName
+        --     b = Name "b" :: TermName
+        --     w = Name "w" :: TermName
+        --   in
+        --   HypothesisRule
+        --     { quantifications: make (forAll [a /\ node, b /\ node, w /\ weight])
+        --     , proposition: edge (var_node a) (var_node b) (var_weight w)
+        --     , filter: Nothing } $ Right $
+        --   -- 
+        --   distance (var_node a) (var_node b) (var_weight w)
+        -- ,
+        --   -- ╭
+        --   -- │ ∀(a: discrete(int)), ∀(b: discrete(int)), ∀(v: op(int)). distance(tuple(tuple(a, b), v))
+        --   -- │ ∀(c: discrete(int)), ∀(w: op(int)). distance(tuple(tuple(b, c), w))
+        --   -- ├──────────────────────────────────────────────────────────────────────────────────────────────
+        --   -- │ distance(tuple(tuple(a, c), add(v, w)))
+        --   -- ╰ 
+        --   Tuple _distance_transitivity $
+        --   let
+        --     a = Name "a" :: TermName
+        --     b = Name "b" :: TermName
+        --     c = Name "c" :: TermName
+        --     v = Name "v" :: TermName
+        --     w = Name "w" :: TermName
+        --   in
+        --     HypothesisRule 
+        --       { quantifications: make (forAll [a /\ node, b /\ node, v /\ weight])
+        --       , proposition: distance (var_node a) (var_node b) (var_weight v)
+        --       , filter: Nothing }
+        --     $ Left $ -- ────────────────────────────────────────────────────────
+        --     HypothesisRule 
+        --       { quantifications: make (forAll [c /\ node, w /\ weight])
+        --       , proposition: distance (var_node b) (var_node c) (var_weight w)
+        --       , filter: Nothing } 
+        --     $ Right $ -- ───────────────────────────────────────────────────────
+        --     distance (var_node a) (var_node c) (add_weight (var_weight v) (var_weight w)) 
+        -- , 
+          
           -- ╭
           -- │ ∀(a: node), ∀(b: node), ∀(v: weight). distance(((a, b), v))
           -- │ ∀(c: node), ∀(w: weight). edge(((b, c), w))
@@ -194,43 +195,54 @@ makeModule graph = do
             w = Name "w" :: TermName
           in
           Tuple _distance_edge $
-            HypothesisRule 
-              { quantifications: make (forAll [a /\ node, b /\ node, v /\ weight])
-              , proposition: distance (var_node a) (var_node b) (var_weight v)
-              , filter: Nothing }
-            $ Left $ -- ────────────────────────────────────────────────────────
-            HypothesisRule 
-              { quantifications: make (forAll [c /\ node, w /\ weight])
-              , proposition: edge (var_node b) (var_node c) (var_weight w)
-              , filter: Nothing }
-            $ Right $ -- ───────────────────────────────────────────────────────
-            distance (var_node a) (var_node c) (add_weight (var_weight v) (var_weight w)) 
-        , 
-          -- ╭
-          -- │ ∀(c: node), ∀(w: weight). distance((b, c), w)
-          -- │ ∀(a: node), ∀(b: node), ∀(v: weight). edge((a, b), v))
-          -- ├─────────────────────────────────────────────────────────
-          -- │ distance((a, c), v + w)
-          -- ╰ 
-          let
-            a = Name "a" :: TermName
-            b = Name "b" :: TermName
-            c = Name "c" :: TermName
-            v = Name "v" :: TermName
-            w = Name "w" :: TermName
-          in
-          Tuple _edge_distance $
-            HypothesisRule 
-              { quantifications: make (forAll [c /\ node, w /\ weight])
-              , proposition: distance (var_node b) (var_node c) (var_weight w)
-              , filter: Nothing } 
-            $ Left $ -- ────────────────────────────────────────────────────────
-            HypothesisRule
-              { quantifications: make (forAll [a /\ node, b /\ node, v /\ weight])
-              , proposition: edge (var_node a) (var_node b) (var_weight v)
-              , filter: Nothing }
-            $ Right $ -- ───────────────────────────────────────────────────────
-            distance (var_node a) (var_node c) (add_weight (var_weight v) (var_weight w)) 
+          -- HypothesisRule 
+          --   { quantifications: make (forAll [a /\ node, b /\ node, v /\ weight])
+          --   , proposition: distance (var_node a) (var_node b) (var_weight v)
+          --   , filter: Nothing }
+          -- $ Left $ -- ────────────────────────────────────────────────────────
+          -- HypothesisRule 
+          --   { quantifications: make (forAll [c /\ node, w /\ weight])
+          --   , proposition: edge (var_node b) (var_node c) (var_weight w)
+          --   , filter: Nothing }
+          -- $ Right $ -- ───────────────────────────────────────────────────────
+          -- distance (var_node a) (var_node c) (add_weight (var_weight v) (var_weight w)) 
+
+          QuantificationRule (Left (UniversalQuantification a node)) $
+          QuantificationRule (Left (UniversalQuantification b node)) $
+          QuantificationRule (Left (UniversalQuantification v weight)) $
+          PremiseRule (distance (var_node a) (var_node b) (var_weight v)) $
+          QuantificationRule (Left (UniversalQuantification c node)) $
+          QuantificationRule (Left (UniversalQuantification w weight)) $
+          PremiseRule (edge (var_node b) (var_node c) (var_weight w)) $
+          ConclusionRule (distance (var_node a) (var_node c) (add_weight (var_weight v) (var_weight w)))
+
+
+        -- , 
+        --   -- ╭
+        --   -- │ ∀(c: node), ∀(w: weight). distance((b, c), w)
+        --   -- │ ∀(a: node), ∀(b: node), ∀(v: weight). edge((a, b), v))
+        --   -- ├─────────────────────────────────────────────────────────
+        --   -- │ distance((a, c), v + w)
+        --   -- ╰ 
+        --   let
+        --     a = Name "a" :: TermName
+        --     b = Name "b" :: TermName
+        --     c = Name "c" :: TermName
+        --     v = Name "v" :: TermName
+        --     w = Name "w" :: TermName
+        --   in
+        --   Tuple _edge_distance $
+        --     HypothesisRule 
+        --       { quantifications: make (forAll [c /\ node, w /\ weight])
+        --       , proposition: distance (var_node b) (var_node c) (var_weight w)
+        --       , filter: Nothing } 
+        --     $ Left $ -- ────────────────────────────────────────────────────────
+        --     HypothesisRule
+        --       { quantifications: make (forAll [a /\ node, b /\ node, v /\ weight])
+        --       , proposition: edge (var_node a) (var_node b) (var_weight v)
+        --       , filter: Nothing }
+        --     $ Right $ -- ───────────────────────────────────────────────────────
+        --     distance (var_node a) (var_node c) (add_weight (var_weight v) (var_weight w)) 
         ]
     , 
       databaseSpecs = Map.fromFoldable

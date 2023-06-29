@@ -94,14 +94,23 @@ makeGrammarRulesAndAxioms (Grammar grammar) =
             Just {head: sym, tail: form'} -> do
               i0 <- prevIndex
               i1 <- nextIndex
-              HypothesisRule
-                { quantifications: make (forAll ((if isFirst then [i0 /\ lty_index] else []) <> [i1 /\ lty_index]))
-                , proposition: parsed (var_index i0) (var_index i1) (lit_symbol sym)
-                , filter: Nothing } <$>
+
+              (if isFirst then QuantificationRule (Left (UniversalQuantification i0 lty_index)) else identity) <<<
+                QuantificationRule (Left (UniversalQuantification i1 lty_index)) <<<
+                PremiseRule (parsed (var_index i0) (var_index i1) (lit_symbol sym)) <$>
                 if Array.null form' then 
-                  pure $ Right $ parsed (var_index (makeVarIndex 0)) (var_index i1) (lit_symbol nt)
+                  pure (ConclusionRule (parsed (var_index (makeVarIndex 0)) (var_index i1) (lit_symbol nt)))
                 else
-                  Left <$> go false form'
+                  go false form'
+
+              -- HypothesisRule
+              --   { quantifications: make (forAll ((if isFirst then [i0 /\ lty_index] else []) <> [i1 /\ lty_index]))
+              --   , proposition: parsed (var_index i0) (var_index i1) (lit_symbol sym)
+              --   , filter: Nothing } <$>
+              --   if Array.null form' then 
+              --     pure $ Right $ parsed (var_index (makeVarIndex 0)) (var_index i1) (lit_symbol nt)
+              --   else
+              --     Left <$> go false form'
         in
         evalState (go true (CodeUnits.toCharArray _form)) 0
   }
