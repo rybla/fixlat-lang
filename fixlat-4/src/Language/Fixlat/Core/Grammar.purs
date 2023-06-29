@@ -120,10 +120,23 @@ instance Pretty LatticeType where
     StringLatticeType -> "string"
     OpLatticeType lty -> "op" <> parens (pretty lty)
     DiscreteLatticeType ty -> "discrete" <> parens (pretty ty)
-    TupleLatticeType LexicographicTupleOrdering lty1 lty2 -> parens (pretty lty1 <> ", " <> pretty lty2)
+    TupleLatticeType LexicographicTupleOrdering lty1 lty2 -> parens (pretty lty1 <> ",[<] " <> pretty lty2)
+    TupleLatticeType ParallelTupleOrdering lty1 lty2 -> parens (pretty lty1 <> ",[|] " <> pretty lty2)
+    TupleLatticeType DiscreteTupleOrdering lty1 lty2 -> parens (pretty lty1 <> ",[=] " <> pretty lty2)
 
 data TupleOrdering
   = LexicographicTupleOrdering
+  | ParallelTupleOrdering
+  | DiscreteTupleOrdering
+
+toDataType :: LatticeType -> DataType
+toDataType BoolLatticeType = BoolDataType
+toDataType IntLatticeType = IntDataType
+toDataType NatLatticeType = NatDataType
+toDataType StringLatticeType = StringDataType
+toDataType (OpLatticeType lty) = toDataType lty
+toDataType (DiscreteLatticeType dty) = dty
+toDataType (TupleLatticeType _ lty1 lty2) = TupleDataType (toDataType lty1) (toDataType lty2)
 
 derive instance Generic TupleOrdering _
 instance Show TupleOrdering where show x = genericShow x
@@ -184,6 +197,20 @@ instance PartialOrd ConcreteTerm where
             case comparePartial x1 x2 of
               Just EQ -> comparePartial y1 y2
               mc -> mc
+
+      TupleLatticeType ParallelTupleOrdering _ _ 
+        | (TupleConstructor /\ [x1, y1]) /\ (TupleConstructor /\ [x2, y2]) <- (p1 /\ args1) /\ (p2 /\ args2) -> do
+            let 
+              c1 = comparePartial x1 x2
+              c2 = comparePartial y1 y2
+            if c1 == c2 then c1 else Nothing
+
+      TupleLatticeType DiscreteTupleOrdering _ _ 
+        | (TupleConstructor /\ [x1, y1]) /\ (TupleConstructor /\ [x2, y2]) <- (p1 /\ args1) /\ (p2 /\ args2) -> do
+            let 
+              c1 = comparePartial x1 x2
+              c2 = comparePartial y1 y2
+            if c1 == Just EQ && c2 == Just EQ then Just EQ else Nothing
 
       BoolLatticeType | (BoolConstructor false /\ []) /\ (BoolConstructor false /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
       BoolLatticeType | (BoolConstructor false /\ []) /\ (BoolConstructor true /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just LT
