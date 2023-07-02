@@ -5,7 +5,6 @@ import Data.Tuple.Nested
 import Data.Variant
 import Prelude
 import Prim hiding (Type)
-
 import Control.Assert (Assertion, assert, assertI)
 import Control.Assert.Assertions (equal, exactLength, just)
 import Control.Assert.Refined (class Refined)
@@ -15,7 +14,7 @@ import Data.Bifunctor (class Bifunctor, bimap, lmap, rmap)
 import Data.Either (Either(..))
 import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
-import Data.Lattice (class Lattice, class PartialOrd, comparePartial)
+import Data.LatticeF
 import Data.List (List(..), (:))
 import Data.List as List
 import Data.Make (class Make)
@@ -160,7 +159,8 @@ type LatticeTerm = Term LatticeType
 data Term ty x
   = ApplicationTerm FunctionName (Array (Term ty x)) ty
   | ConstructorTerm Constructor (Array (Term ty x)) ty
-  | VarTerm x ty
+  | QuantTerm x ty
+  | BoundTerm TermName ty
 
 derive instance Generic (Term ty x) _
 instance (Show x, Show ty) => Show (Term ty x) where show x = genericShow x
@@ -178,18 +178,20 @@ instance Pretty (Term ty TermName) where
       IntConstructor x /\ [] -> show x
       StringConstructor s /\ [] -> show s
       _ -> pretty prim <> parens (pretty tms)
-    VarTerm x _ -> pretty x
+    QuantTerm x _ -> "?" <> pretty x
+    BoundTerm x _ -> pretty x
 
 instance Pretty (Term ty Void) where pretty = pretty <<< toSymbolicTerm
 
+{-
 -- TODO: should this also be over SymbolicTerm?
-instance PartialOrd ConcreteTerm where
+instance PartialOrdF m ConcreteTerm where
 
   comparePartial term@(ApplicationTerm _ _ _) _ = bug $ "In order to compare concrete terms, they must be fully simplified. However, you attempted to compare a neutral term " <> ticks (show term) <> "."
   comparePartial _ term@(ApplicationTerm _ _ _) = bug $ "In order to compare concrete terms, they must be fully simplified. However, you attempted to compare a neutral term " <> ticks (show term) <> "."
 
-  comparePartial (VarTerm x _) _ = absurd x
-  comparePartial _ (VarTerm x _) = absurd x
+  comparePartial (QuantTerm x _) _ = absurd x
+  comparePartial _ (QuantTerm x _) = absurd x
 
   comparePartial (ConstructorTerm p1 args1 _lty1) (ConstructorTerm p2 args2 _lty2) =
     assert equal (_lty1 /\ _lty2) case _ of
@@ -237,11 +239,13 @@ instance PartialOrd ConcreteTerm where
           [ "lty = " <> ticks (show lty)
           , "(p1 /\\ args2) = " <> ticks (pretty p1 <> parens (pretty args1))
           , "(p2 /\\ args2) = " <> ticks (pretty p2 <> parens (pretty args2)) ]
+-}
 
 typeOfTerm :: forall ty x. Term ty x -> ty
 typeOfTerm (ApplicationTerm _ _ ty) = ty
 typeOfTerm (ConstructorTerm _ _ ty) = ty
-typeOfTerm (VarTerm _ ty) = ty
+typeOfTerm (QuantTerm _ ty) = ty
+typeOfTerm (BoundTerm _ ty) = ty
 
 data Constructor 
   = ZeroConstructor
@@ -265,14 +269,16 @@ instance Pretty Constructor where
     BoolConstructor x -> show x
     StringConstructor x -> show x
 
-type Sub = Map.Map TermName ConcreteTerm
+type TermSub = Map.Map TermName ConcreteTerm
+type QuantCtx = Array Quantification
 
-substituteTerm :: Sub -> SymbolicTerm -> SymbolicTerm
-substituteTerm sigma (ApplicationTerm fun tms ty) = ApplicationTerm fun (substituteTerm sigma <$> tms) ty
-substituteTerm sigma (ConstructorTerm prim tms ty) = ConstructorTerm prim (substituteTerm sigma <$> tms) ty
-substituteTerm sigma (VarTerm x ty) = case Map.lookup x sigma of
-  Just tm -> toSymbolicTerm tm
-  Nothing -> VarTerm x ty
+-- substituteTerm :: TermSub -> SymbolicTerm -> SymbolicTerm
+-- substituteTerm sigma (ApplicationTerm fun tms ty) = ApplicationTerm fun (substituteTerm sigma <$> tms) ty
+-- substituteTerm sigma (ConstructorTerm prim tms ty) = ConstructorTerm prim (substituteTerm sigma <$> tms) ty
+-- substituteTerm sigma (QuantTerm x ty) = case Map.lookup x sigma of
+--   Just tm -> toSymbolicTerm tm
+--   Nothing -> QuantTerm x ty
+-- substituteTerm _sigma (BoundTerm x ty) = BoundTerm x ty
 
 concreteTerm :: Assertion SymbolicTerm ConcreteTerm
 concreteTerm = 
@@ -284,7 +290,8 @@ checkConcreteTerm :: SymbolicTerm -> Either String ConcreteTerm
 checkConcreteTerm = case _ of
   ApplicationTerm fun tms ty -> ApplicationTerm fun <$> checkConcreteTerm `traverse` tms <*> pure ty
   ConstructorTerm prim tms ty -> ConstructorTerm prim <$> traverse checkConcreteTerm tms <*> pure ty
-  term@(VarTerm _ _) -> Left $ "Term " <> ticks (show term) <> " is not concrete."
+  BoundTerm name ty -> Right $ BoundTerm name ty
+  term@(QuantTerm _ _) -> Left $ "Term " <> ticks (show term) <> " is not concrete."
 
 toSymbolicTerm :: forall ty. Term ty Void -> Term ty TermName
 toSymbolicTerm = rmap absurd
@@ -345,13 +352,14 @@ data Proposition ty x = Proposition RelationName (Term ty x)
 
 derive instance Generic (Proposition ty x) _
 instance (Show x, Show ty) => Show (Proposition ty x) where show x = genericShow x
+instance (Eq x, Eq ty) => Eq (Proposition ty x) where eq x y = genericEq x y
 derive instance Bifunctor Proposition
 
 instance Pretty (Proposition ty TermName) where pretty (Proposition rel tm) = pretty rel <> brackets (pretty tm)
 instance Pretty (Proposition ty Void) where pretty = pretty <<< toSymbolicProposition
 
-substituteProposition :: Sub -> SymbolicProposition -> SymbolicProposition
-substituteProposition sigma (Proposition rel arg) = Proposition rel (substituteTerm sigma arg)
+-- substituteProposition :: TermSub -> SymbolicProposition -> SymbolicProposition
+-- substituteProposition sigma (Proposition rel arg) = Proposition rel (substituteTerm sigma arg)
 
 concreteProposition :: Assertion SymbolicProposition ConcreteProposition
 concreteProposition = 
@@ -362,11 +370,13 @@ concreteProposition =
 toSymbolicProposition :: forall ty. Proposition ty Void -> Proposition ty TermName
 toSymbolicProposition = rmap absurd
 
+{-
 instance PartialOrd ConcreteProposition where
   comparePartial (Proposition rel1 arg1) (Proposition rel2 arg2) =
     if rel1 == rel2 
       then comparePartial arg1 arg2
       else Nothing
+-}
 
 --------------------------------------------------------------------------------
 -- Axiom
@@ -408,6 +418,7 @@ data Rule
 
 derive instance Generic Rule _
 instance Show Rule where show x = genericShow x
+instance Eq Rule where eq x y = genericEq x y
 
 instance Pretty Rule where
   pretty _rule = "╭\n" <> lines [lines strs1, hline, lines strs2] <> "\n╰ "
@@ -424,17 +435,12 @@ instance Pretty Rule where
     padding_right = 4
     hline = "├" <> (String.fromCodePointArray (Array.replicate (max_length + padding_right) (String.codePointFromChar '─')))
 
-
-instance Refined "Rule" Rule where
-  -- TODO: encode requirements
-  validate' = \_ -> pure unit
-
-substituteRule :: Sub -> Rule -> Rule
-substituteRule sigma (PremiseRule prem rule) = PremiseRule (substituteProposition sigma prem) (substituteRule sigma rule)
-substituteRule sigma (FilterRule cond rule) = FilterRule (substituteTerm sigma cond) (substituteRule sigma rule)
-substituteRule sigma (QuantificationRule quant rule) = QuantificationRule quant (substituteRule sigma rule)
-substituteRule sigma (LetRule name term rule) = LetRule name (substituteTerm sigma term) (substituteRule sigma rule)
-substituteRule sigma (ConclusionRule prop) = ConclusionRule (substituteProposition sigma prop)
+-- substituteRule :: TermSub -> Rule -> Rule
+-- substituteRule sigma (PremiseRule prem rule) = PremiseRule (substituteProposition sigma prem) (substituteRule sigma rule)
+-- substituteRule sigma (FilterRule cond rule) = FilterRule (substituteTerm sigma cond) (substituteRule sigma rule)
+-- substituteRule sigma (QuantificationRule quant rule) = QuantificationRule quant (substituteRule sigma rule)
+-- substituteRule sigma (LetRule name term rule) = LetRule name (substituteTerm sigma term) (substituteRule sigma rule)
+-- substituteRule sigma (ConclusionRule prop) = ConclusionRule (substituteProposition sigma prop)
 
 type Quantification = UniversalQuantification \/ ExistentialQuantification
 
@@ -461,8 +467,8 @@ instance Pretty ExistentialQuantification where pretty (ExistentialQuantificatio
 --------------------------------------------------------------------------------
 
 newtype FixpointSpec = FixpointSpec 
-  { axiomNames :: Maybe (Array AxiomName)
-  , ruleNames :: Maybe (Array RuleName)
+  { axiomNames :: Array AxiomName
+  , ruleNames :: Array RuleName
   }
 
 derive instance Newtype FixpointSpec _

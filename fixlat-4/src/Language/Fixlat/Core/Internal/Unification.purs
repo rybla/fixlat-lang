@@ -1,5 +1,43 @@
-module Language.Fixlat.Core.Unification where
+module Language.Fixlat.Core.Internal.Unification where
 
+import Control.Monad.Trans.Class
+import Data.Either.Nested
+import Data.Tuple.Nested
+import Language.Fixlat.Core.Grammar
+import Language.Fixlat.Core.Internal.Base
+import Prelude
+import Control.Monad.Except (ExceptT)
+import Control.Monad.Reader (ReaderT)
+import Control.Monad.State (StateT)
+import Data.Map as Map
+import Hole (hole)
+import Language.Fixlat.Core.ModuleT (ModuleT)
+
+--------------------------------------------------------------------------------
+-- UnifyT
+--------------------------------------------------------------------------------
+
+type UnifyT m a = ReaderT Ctx (ExceptT String (StateT Env (ModuleT m))) a
+
+liftUnifyT :: forall m a. Monad m => ModuleT m a -> UnifyT m a
+liftUnifyT = lift >>> lift >>> lift
+
+type Ctx = 
+  { originMessage :: String
+  , gamma :: QuantCtx }
+
+type Env = TermSub
+
+class Unifiable x y | x -> y where
+  unify :: forall m. Monad m => x -> y -> UnifyT m Unit
+
+instance Unifiable SymbolicProposition ConcreteProposition where
+  unify expected actual = hole "unifyProposition"
+
+instance Unifiable SymbolicTerm ConcreteTerm where
+  unify expected actual = hole "unifyTerm"
+
+{-
 import Data.Either.Nested
 import Data.Tuple.Nested
 import Language.Fixlat.Core.Grammar
@@ -75,8 +113,8 @@ unifyTerm term1 term2 | typeOfTerm term1 /= typeOfTerm term2 = do
     Left (expected /\ actual) -> ticks (pretty expected) <> " with " <> ticks (pretty actual)
     Right (expected /\ actual) -> ticks (pretty expected) <> " with " <> ticks (pretty actual)
 unifyTerm _ (ApplicationTerm _ _ _) = bug $ "In order to unify a symbolic term with a concrete term, the concrete term must be fully simplified."
-unifyTerm _ (VarTerm x _) = absurd x
-unifyTerm (VarTerm x1 _) term2 = addSubstitution x1 term2
+unifyTerm _ (QuantTerm x _) = absurd x
+unifyTerm (QuantTerm x1 _) term2 = addSubstitution x1 term2
 unifyTerm (ConstructorTerm p1 args1 _) (ConstructorTerm p2 args2 _) | p1 == p2 =
   for_ (args1 `Array.zip` args2) (uncurry unifyTerm)
 unifyTerm term1 term2 = throwError $ "Cannot unify " <> ticks (pretty term1) <> " with " <> ticks (pretty term2) <> "."
@@ -87,3 +125,4 @@ addSubstitution name term = do
   case Map.lookup name sigma of
     Just term' -> unifyTerm (toSymbolicTerm term) term'
     Nothing -> modify_ $ Map.insert name term
+-}

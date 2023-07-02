@@ -14,7 +14,7 @@ runModuleT (ModuleT m) = m
 
 type ModuleCtx =
   { module_ :: Module
-  , initial_gas :: Int
+  , initialGas :: Int
   }
 
 _dataTypes = Proxy :: Proxy "dataTypes"
