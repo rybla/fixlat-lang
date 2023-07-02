@@ -49,7 +49,7 @@ liftGenerateT = lift
 type FixpointEnv =
   { gas :: Int
   , database :: Database
-  , rules :: Array NormRule
+  , rules :: List NormRule
   , queue :: Queue
   , comparePatch :: Patch -> Patch -> Ordering
   }

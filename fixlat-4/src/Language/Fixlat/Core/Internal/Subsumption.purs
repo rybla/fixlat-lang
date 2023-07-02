@@ -6,7 +6,6 @@ import Data.Tuple.Nested
 import Language.Fixlat.Core.Grammar
 import Language.Fixlat.Core.Internal.Base
 import Prelude
-
 import Control.Monad.Except (ExceptT)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.State (StateT)

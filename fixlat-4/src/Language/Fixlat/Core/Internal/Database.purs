@@ -6,7 +6,7 @@ import Prelude
 
 import Control.Debug as Debug
 import Control.Monad.Reader (ask, asks, lift, runReaderT)
-import Control.Monad.State (gets, modify_)
+import Control.Monad.State (gets, modify, modify_)
 import Data.Either (Either(..))
 import Data.List (List(..), (:))
 import Data.List as List
@@ -15,7 +15,7 @@ import Data.Maybe (Maybe(..))
 import Effect.Class (class MonadEffect)
 import Hole (hole)
 import Language.Fixlat.Core.Grammar as G
-import Language.Fixlat.Core.Internal.Base (Database(..), GenerateT, NormRule(..), Patch, _database)
+import Language.Fixlat.Core.Internal.Base (Database(..), GenerateT, NormRule(..), Patch(..), _database, _rules)
 import Language.Fixlat.Core.Internal.Subsumption (subsumes)
 import Record as R
 import Type.Proxy (Proxy(..))
@@ -46,7 +46,10 @@ insertProposition prop = do
 learnPatch :: forall m. MonadEffect m =>
   Patch ->
   GenerateT m (Proxy "learned patch was subsumed" \/ List Patch)
-learnPatch = hole "learnPatch"
+learnPatch (ConclusionPatch _) = hole "learnPatch"
+learnPatch (ApplyPatch rule) = do
+  modify_ $ R.modify _rules (rule : _)
+  hole "TODO"
 
 -- | Enqueue a patch.
 enqueuePatch :: forall m. MonadEffect m =>

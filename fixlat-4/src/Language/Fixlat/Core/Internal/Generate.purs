@@ -8,9 +8,10 @@ import Control.Assert.Assertions (keyOfMap)
 import Control.Debug as Debug
 import Control.Monad.State (execStateT, modify, modify_)
 import Data.Array as Array
-import Data.Either (either)
+import Data.Either (Either(..), either)
 import Data.List (List(..))
 import Data.List as List
+import Data.List.NonEmpty as NonEmptyList
 import Data.List.NonEmpty as NonemptyList
 import Data.Make (make)
 import Data.Map as Map
@@ -20,9 +21,10 @@ import Data.Traversable (for, for_, traverse, traverse_)
 import Effect.Class (class MonadEffect)
 import Hole (hole)
 import Language.Fixlat.Core.Grammar as G
-import Language.Fixlat.Core.Internal.Base (Database(..), FixpointEnv, GenerateT, Patch(..), Queue(..), _gas, decrementGasNonpositive, emptyDatabase, normRule)
+import Language.Fixlat.Core.Internal.Base (Database(..), FixpointEnv, GenerateT, Patch(..), Queue(..), _gas, decrementGasNonpositive, emptyDatabase)
 import Language.Fixlat.Core.Internal.Database as Database
 import Language.Fixlat.Core.Internal.Queue as Queue
+import Language.Fixlat.Core.Internal.RuleNormalization (normRule)
 import Language.Fixlat.Core.ModuleT (ModuleT, getModuleCtx)
 import Record as R
 
@@ -44,7 +46,6 @@ generate (Database initialProps) fixpointSpecName = do
   rules <- (unwrap moduleCtx.module_).rules #
     Map.filterWithKey (\ruleName _ -> ruleName `Array.elem` ((unwrap fixpointSpec).ruleNames)) >>>
     Map.values >>>
-    Array.fromFoldable >>>
     map make >>>
     traverse normRule
 
@@ -53,8 +54,8 @@ generate (Database initialProps) fixpointSpecName = do
               Map.filterWithKey (\axiomName _ -> axiomName `Array.elem` ((unwrap fixpointSpec).axiomNames)) >>>
               Map.values >>>
               Array.fromFoldable
-        let props = initialProps <> (axioms <#> \(G.Axiom prop) -> prop)
-        Queue (List.fromFoldable (ConclusionPatch <$> props))
+        let props = initialProps <> List.fromFoldable (axioms <#> \(G.Axiom prop) -> prop)
+        Queue (NonEmptyList.singleton <$> (ConclusionPatch <$> props))
 
   let comparePatch = const <<< const $ GT
 
@@ -88,10 +89,10 @@ loop = do
       end
     else do
       Queue.pop >>= case _ of
-        Nothing -> do
+        Left _ -> do
           Debug.debugA "[loop] no more patches"
           end
-        Just patches -> do
+        Right patches -> do
           Debug.debugA $ "[loop] new patches count: " <> show (NonemptyList.length patches)
           let merge = map (either (const Nil) identity) >>> NonemptyList.toList >>> List.concat
           patches #
