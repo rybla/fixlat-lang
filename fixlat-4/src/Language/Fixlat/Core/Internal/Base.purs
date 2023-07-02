@@ -1,40 +1,22 @@
 module Language.Fixlat.Core.Internal.Base where
 
-import Data.Tuple.Nested
 import Prelude
-
-import Control.Assert (assert, assertI)
-import Control.Assert.Assertions (just, keyOfMap)
-import Control.Bug (bug)
-import Control.Debug as Debug
-import Control.Monad.Reader (ask)
-import Control.Monad.State (State, StateT, execStateT, gets, modify, modify_, runState)
+import Control.Monad.State (StateT, modify)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as Array
-import Data.Either (Either(..))
-import Data.Foldable (traverse_)
 import Data.Generic.Rep (class Generic)
-import Data.Lattice ((~?))
-import Data.List (List(..), (:))
-import Data.List as List
+import Data.List (List(..))
 import Data.List.Types (NonEmptyList)
 import Data.List.Types as NonEmptyList
-import Data.Make (class Make, make)
+import Data.Make (class Make)
 import Data.Map as Map
-import Data.Maybe (Maybe(..))
-import Data.Newtype (class Newtype, unwrap)
+import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
-import Data.String as String
-import Data.Traversable (for, traverse)
-import Data.Tuple (curry)
-import Data.Tuple.Nested ((/\))
 import Effect.Class (class MonadEffect)
-import Hole (hole)
-import Language.Fixlat.Core.Grammar (Axiom(..), Proposition)
 import Language.Fixlat.Core.Grammar as G
-import Language.Fixlat.Core.ModuleT (ModuleT, getModuleCtx)
+import Language.Fixlat.Core.ModuleT (ModuleT)
 import Record as R
-import Text.Pretty (class Pretty, bullets, indent, pretty, ticks, (<+>), (<\>))
+import Text.Pretty (class Pretty, bullets, indent, pretty, (<\>))
 import Type.Proxy (Proxy(..))
 
 --------------------------------------------------------------------------------
