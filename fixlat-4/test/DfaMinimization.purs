@@ -121,10 +121,7 @@ live = do
 --------------------------------------------------------------------------------
 -- databases
 --------------------------------------------------------------------------------
-_db_reachability = Name "db_reachability" :: DatabaseSpecName
 _fix_reachability = Name "fix_reachability" :: FixpointSpecName
-
-_db_live = Name "df_live" :: DatabaseSpecName
 _fix_live = Name "fix_live" :: FixpointSpecName
 
 --------------------------------------------------------------------------------
@@ -240,21 +237,13 @@ makeModule (Dfa dfa) =
             ]
         ]
     , 
-      databaseSpecs = Map.fromFoldable
-        [
-          Tuple _db_reachability $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
-            {
-              fixpoints = Map.singleton _fix_reachability $ FixpointSpec
-                { axiomNames: Nothing
-                , ruleNames: Just [_starting_reachable, _transition_reachable] }
-            }
-        ,
-          Tuple _db_live $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
-            {
-              fixpoints = Map.singleton _fix_live $ FixpointSpec
-                { axiomNames: Nothing
-                , ruleNames: Just [_accepting_live, _transition_live] }
-            }
+      fixpoints = Map.fromFoldable 
+        [ _fix_reachability /\ FixpointSpec
+            { axiomNames: Nothing
+            , ruleNames: Just [_starting_reachable, _transition_reachable] }
+        , _fix_live /\ FixpointSpec
+            { axiomNames: Nothing
+            , ruleNames: Just [_accepting_live, _transition_live] }
         ]
     }
 
@@ -285,22 +274,22 @@ main = do
     ctx :: ModuleCtx
     ctx = 
       { initial_gas: 1000
-      , module_: makeModule dfa
+      , module_: makeModule dfa 
       }
 
   -- -- reachability
   -- do
   --   let db_reachability = emptyDatabase
-  --   Console.log $ "[Parsing.main] Input database:" <> pretty db_reachability <> "\n"
+  --   Console.log $ "[DfaMinimization.main] Input database:" <> pretty db_reachability <> "\n"
   --   db_reachability' <- runReaderT (runModuleT (fixpoint db_reachability _db_reachability _fix_reachability)) ctx
-  --   Console.log $ "[Parsing.main] Output database:" <> pretty db_reachability' <> "\n"
+  --   Console.log $ "[DfaMinimization.main] Output database:" <> pretty db_reachability' <> "\n"
 
   -- live
   do
     let db_live = emptyDatabase
-    Console.log $ "[Parsing.main] Input database:" <> pretty db_live <> "\n"
-    db_live' <- runReaderT (runModuleT (fixpoint db_live _db_live _fix_live)) ctx
-    Console.log $ "[Parsing.main] Output database:" <> pretty db_live' <> "\n"
+    Console.log $ "[DfaMinimization.main] Input database:" <> pretty db_live <> "\n"
+    db_live' <- runReaderT (runModuleT (fixpoint db_live _fix_live)) ctx
+    Console.log $ "[DfaMinimization.main] Output database:" <> pretty db_live' <> "\n"
 
   Console.log "[DfaMinimization.main] Finish"
   pure unit

@@ -80,8 +80,7 @@ add_weight x y = add x y weight
 
 -- db
 
-_db = Name "db" :: DatabaseSpecName
-_db_fix = Name "db_fix" :: FixpointSpecName
+_fix = Name "fix" :: FixpointSpecName
 
 data Graph = Graph
   { endpoint :: Int
@@ -245,21 +244,16 @@ makeModule graph = do
         --     distance (var_node a) (var_node c) (add_weight (var_weight v) (var_weight w)) 
         ]
     , 
-      databaseSpecs = Map.fromFoldable
-        [ Tuple _db $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
-            { 
-              fixpoints = Map.fromFoldable
-                [ 
-                  Tuple _db_fix $ FixpointSpec 
-                    { axiomNames: Just $ Array.fromFoldable (Map.keys db_graph)
-                    , ruleNames: Just $ 
-                        [
-                          -- _distance_transitivity, _distance_single_edge
-                          _distance_edge
-                          -- _edge_distance
-                        ] }
-                ]
-            }
+      fixpoints = Map.fromFoldable
+        [ 
+          Tuple _fix $ FixpointSpec 
+            { axiomNames: Just $ Array.fromFoldable (Map.keys db_graph)
+            , ruleNames: Just $ 
+                [
+                  -- _distance_transitivity, _distance_single_edge
+                  _distance_edge
+                  -- _edge_distance
+                ] }
         ]
     }
 
@@ -286,7 +280,7 @@ main = do
 
   let db = emptyDatabase
   Console.log $ "[Dijkstra.main] Input database:\n" <> pretty db <> "\n"
-  db' <- runReaderT (runModuleT (fixpoint db _db _db_fix)) ctx
+  db' <- runReaderT (runModuleT (fixpoint db _fix)) ctx
   Console.log $ "[Dijkstra.main] Output database:\n" <> pretty db' <> "\n"
 
   pure unit

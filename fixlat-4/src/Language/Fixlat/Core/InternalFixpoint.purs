@@ -53,12 +53,11 @@ instance Pretty Rule where
   pretty (Rule rule) = pretty rule.rule
 
 -- | Internal fixpoint implementation.
-fixpoint :: forall m. MonadEffect m => Database -> G.DatabaseSpecName -> G.FixpointSpecName -> ModuleT m Database
-fixpoint (Database props) databaseSpecName fixpointSpecName = do
+fixpoint :: forall m. MonadEffect m => Database -> G.FixpointSpecName -> ModuleT m Database
+fixpoint (Database props) fixpointSpecName = do
   Debug.debugA "[fixpoint] start"
   moduleCtx <- getModuleCtx
-  let databaseSpec = assertI keyOfMap $ databaseSpecName /\ (unwrap moduleCtx.module_).databaseSpecs
-  let fixpointSpec = assertI keyOfMap $ fixpointSpecName /\ (unwrap databaseSpec).fixpoints
+  let fixpointSpec = assertI keyOfMap $ fixpointSpecName /\ (unwrap moduleCtx.module_).fixpoints
 
   let axioms = case (unwrap fixpointSpec).axiomNames of
         Nothing -> Array.fromFoldable (unwrap moduleCtx.module_).axioms

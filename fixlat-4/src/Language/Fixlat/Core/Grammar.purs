@@ -43,7 +43,9 @@ newtype Module = Module
   , relations :: Map.Map RelationName Relation
   , rules :: Map.Map RuleName Rule
   , axioms :: Map.Map AxiomName Axiom
-  , databaseSpecs :: Map.Map DatabaseSpecName DatabaseSpec
+  , fixpoints :: Map.Map FixpointSpecName FixpointSpec
+  , queries :: Map.Map QuerySpecName QuerySpec
+  , insertions :: Map.Map InsertionSpecName InsertionSpec
   }
 
 derive instance Newtype Module _
@@ -58,7 +60,9 @@ instance Pretty Module where
         , "relations:" <+> indent (pretty modl.relations)
         , "rules:" <+> indent (pretty modl.rules)
         , "axioms:" <+> indent (pretty modl.axioms)
-        , "databaseSpecs:" <+> indent (pretty modl.databaseSpecs) ] ]
+        , "fixpoints:" <+> indent (pretty modl.fixpoints)
+        , "queries:" <+> indent (pretty modl.queries)
+        , "insertions:" <+> indent (pretty modl.insertions) ] ]
 
 emptyModule :: Module
 emptyModule = Module
@@ -68,7 +72,9 @@ emptyModule = Module
   , relations: Map.empty
   , rules: Map.empty
   , axioms: Map.empty
-  , databaseSpecs: Map.empty }
+  , fixpoints: Map.empty
+  , queries: Map.empty
+  , insertions: Map.empty }
 
 --------------------------------------------------------------------------------
 -- Type
@@ -451,36 +457,9 @@ derive instance Ord ExistentialQuantification
 instance Pretty ExistentialQuantification where pretty (ExistentialQuantification x ty) = "∃" <> parens (pretty x <> ":" <+> pretty ty)
 
 --------------------------------------------------------------------------------
--- Database
+-- Fixpoint, Query, Insertion
 --------------------------------------------------------------------------------
 
--- TODO: maybe rename to "Interface"?
-newtype DatabaseSpec = DatabaseSpec
-  { fixpoints :: Map.Map FixpointSpecName FixpointSpec
-  , queries :: Map.Map QuerySpecName QuerySpec
-  , insertions :: Map.Map InsertionSpecName InsertionSpec
-  }
-
-derive instance Newtype DatabaseSpec _
-derive newtype instance Show DatabaseSpec
-
-instance Pretty DatabaseSpec where
-  pretty (DatabaseSpec database) = lines
-    [ "database:"
-    , indent $ lines
-      [ "fixpoints:" <+> indent (pretty database.fixpoints)
-      , "queries:" <+> indent (pretty database.queries)
-      , "insertions:" <+> indent (pretty database.insertions) ] ]
-
-emptyDatabaseSpec :: DatabaseSpec
-emptyDatabaseSpec = DatabaseSpec
-  { fixpoints: Map.empty
-  , queries: Map.empty
-  , insertions: Map.empty }
-
--- | An DatabaseSpec FixpointSpec specifies a derived function that populates the
--- | DatabaseSpec with the FixpointSpec of the DatabaseSpec's Terms and the given
--- | Rules.
 newtype FixpointSpec = FixpointSpec 
   { axiomNames :: Maybe (Array AxiomName)
   , ruleNames :: Maybe (Array RuleName)
@@ -496,8 +475,6 @@ instance Pretty FixpointSpec where
       [ "axioms:" <+> indent (pretty fixpoint.axiomNames)
       , "rules:" <+> indent (pretty fixpoint.ruleNames) ] ]
 
--- | An DatabaseSpec InsertionSpec specifies a derived function that inserts Terms
--- | into the DatabaseSpec.
 data InsertionSpec = InsertionSpec RelationName
 
 derive instance Generic InsertionSpec _
@@ -506,10 +483,6 @@ instance Show InsertionSpec where show x = genericShow x
 instance Pretty InsertionSpec where
   pretty (InsertionSpec rel) = "insertion" <+> pretty rel
 
--- | An DatabaseSpec QuerySpec specifies a derived function that queries Terms of a
--- | particular form from the DatabaseSpec. The QuerySpec is encoded as a Rule,
--- | which corresponds to QuerySpec that assumes the Rule's premises and looks
--- | for a the lattice-maximal derivation of the conclusion.
 data QuerySpec = QuerySpec Rule
 
 derive instance Generic QuerySpec _
@@ -533,7 +506,6 @@ type FunctionName = Name "Function"
 type RelationName = Name "Relation"
 type RuleName = Name "Rule"
 type AxiomName = Name "Axiom"
-type DatabaseSpecName = Name "Database"
 type ModuleName = Name "Module"
 type FixpointSpecName = Name "Fixpoint"
 type QuerySpecName = Name "Query"

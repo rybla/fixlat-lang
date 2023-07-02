@@ -70,8 +70,7 @@ parsed i1 i2 c = Proposition _parsed $
 
 -- database: db
 
-_db = Name "db" :: DatabaseSpecName
-_db_fix = Name "db_fix" :: FixpointSpecName
+_fix = Name "fix" :: FixpointSpecName
 
 data Grammar = Grammar
   { nonterminals :: Map.Map Char (Array String) }
@@ -143,19 +142,13 @@ makeModule grammar input = do
     , 
       rules = rules
     ,
-      databaseSpecs = Map.fromFoldable
+      fixpoints = Map.fromFoldable
         [
-          Tuple _db $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
-            { 
-              fixpoints = Map.fromFoldable
-                [
-                  Tuple _db_fix $ FixpointSpec
-                    {
-                      axiomNames: Just $ Array.fromFoldable $ Map.keys axioms
-                    ,
-                      ruleNames: Just $ Array.fromFoldable $ Map.keys rules
-                    }
-                ]
+          Tuple _fix $ FixpointSpec
+            {
+              axiomNames: Just $ Array.fromFoldable $ Map.keys axioms
+            ,
+              ruleNames: Just $ Array.fromFoldable $ Map.keys rules
             }
         ]
     }
@@ -188,7 +181,7 @@ main = do
 
   let db = emptyDatabase
   Console.log $ "[Parsing.main] Input database:" <> pretty db <> "\n"
-  db' <- runReaderT (runModuleT (fixpoint db _db _db_fix)) ctx
+  db' <- runReaderT (runModuleT (fixpoint db _fix)) ctx
   Console.log $ "[Parsing.main] Output database:" <> pretty db' <> "\n"
 
   pure unit

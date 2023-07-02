@@ -22,7 +22,6 @@ _add = Name "add" :: RelationName
 _add_zero_zero = Name "add_zero_zero" :: AxiomName
 _add_n_suc = Name "add_n_suc" :: RuleName
 
-_db_add_zero = Name "db_add_zero" :: DatabaseSpecName
 _fix_main = Name "fix_main" :: FixpointSpecName
 
 zero = ConstructorTerm ZeroConstructor [] nat
@@ -90,15 +89,11 @@ module_ = emptyModule # Newtype.over Module _
         -- x + suc y = suc z
         ConclusionRule (add (tuple3 (namedNat x) (suc (namedNat y)) (suc (namedNat z))))
       ]
-  , databaseSpecs = Map.fromFoldable
-      [ Tuple _db_add_zero $ emptyDatabaseSpec # Newtype.over DatabaseSpec _
-          { fixpoints = Map.fromFoldable
-              [ Tuple _fix_main $ FixpointSpec
-                  { axiomNames: Just $ [_add_zero_zero]
-                  , ruleNames: Just $ [_add_n_suc]
-                  }
-              ]
-          } 
+  , fixpoints = Map.fromFoldable
+      [ Tuple _fix_main $ FixpointSpec
+          { axiomNames: Just $ [_add_zero_zero]
+          , ruleNames: Just $ [_add_n_suc]
+          }
       ]
   }
 
@@ -111,7 +106,7 @@ main = do
         { module_
         , initial_gas: 10 }
   let m = do
-        fixpoint db _db_add_zero _fix_main
+        fixpoint db _fix_main
   db' <- runReaderT (runModuleT m) ctx
   Console.log $ "Output database:\n\n" <> show db' <> "\n\n"
   pure unit
