@@ -71,7 +71,7 @@ decrementGasNonpositive = do
 --------------------------------------------------------------------------------
 
 -- | A Database stores all current rules, which includes 
-data Database = Database (Array G.ConcreteProposition)
+data Database = Database (List G.ConcreteProposition)
 
 derive instance Generic Database _
 instance Show Database where show x = genericShow x
@@ -80,7 +80,7 @@ instance Pretty Database where
   pretty (Database props) = bullets (Array.fromFoldable (pretty <$> props))
 
 emptyDatabase :: Database
-emptyDatabase = Database []
+emptyDatabase = Database Nil
 
 --------------------------------------------------------------------------------
 -- Queue
