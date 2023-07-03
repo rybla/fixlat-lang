@@ -33,7 +33,7 @@ unify x y = runUnifyT (unify' x y) >>= case _ of
   sigma /\ Right _ -> pure $ Right sigma
 
 runUnifyT :: forall m a. Monad m => UnifyT m a -> GenerateT m (Env /\ (String \/ a))
-runUnifyT m = runStateT (runExceptT m) Map.empty >>= case _ of
+runUnifyT m = runStateT (runExceptT m) emptyTermSub >>= case _ of
   Left err /\ sigma -> pure $
     (sigma /\ _) $
     Left $

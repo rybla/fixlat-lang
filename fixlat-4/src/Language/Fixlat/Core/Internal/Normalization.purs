@@ -1,28 +1,30 @@
 module Language.Fixlat.Core.Internal.Normalization where
 
-import Control.Monad.Trans.Class (lift)
-import Data.Either.Nested (type (\/))
-import Data.Tuple.Nested ((/\))
 import Language.Fixlat.Core.Internal.Base
 import Prelude
-import Utility ((<##>))
+
 import Control.Assert (assertI)
 import Control.Bug (bug)
 import Control.Monad.Except (ExceptT, runExceptT, throwError)
 import Control.Monad.State (StateT, gets, modify_, runStateT)
+import Control.Monad.Trans.Class (lift)
+import Data.Either.Nested (type (\/))
 import Data.List as List
+import Data.Tuple.Nested ((/\))
 import Effect.Class (class MonadEffect)
 import Language.Fixlat.Core.Grammar as G
 import Language.Fixlat.Core.Internal.Evaluation (evaluate)
+import Language.Fixlat.Core.ModuleT (ModuleT)
 import Record as R
 import Text.Pretty (pretty)
 import Type.Proxy (Proxy(..))
+import Utility ((<##>))
 
 class Normalize (a :: Type) (b :: Type) | a -> b where
-  normalize :: forall m. MonadEffect m => a -> GenerateT m b
+  normalize :: forall m. MonadEffect m => a -> ModuleT m b
 
 instance Normalize InstRule (String \/ NormInstRule) where
-  normalize :: forall m. MonadEffect m => InstRule -> GenerateT m (String \/ NormInstRule)
+  normalize :: forall m. MonadEffect m => InstRule -> ModuleT m (String \/ NormInstRule)
   normalize (InstRule _rule) = do
     let ctx = {gamma: _rule.gamma, sigma: _rule.sigma}
     runExceptT (runStateT (go _rule.rule) ctx) <##>
@@ -31,7 +33,7 @@ instance Normalize InstRule (String \/ NormInstRule) where
     where
       go :: 
         G.Rule ->
-        StateT {gamma :: QuantCtx, sigma :: TermSub} (ExceptT String (GenerateT m))
+        StateT {gamma :: QuantCtx, sigma :: TermSub} (ExceptT String (ModuleT m))
           {premise :: G.SymbolicProposition, rule :: G.Rule}
       go (G.FilterRule cond rule) = do
         sigma <- gets _.sigma
@@ -40,11 +42,11 @@ instance Normalize InstRule (String \/ NormInstRule) where
           then throwError $ "Condition failed: " <> pretty cond'
           else go rule
       go (G.QuantificationRule quant rule) = do
-        modify_ $ R.modify _gamma (_ `List.snoc` quant)
+        modify_ $ R.modify _gamma (List.Cons quant)
         go rule
       go (G.LetRule name term rule) = do
         let term' = assertI G.concreteTerm term
-        modify_ $ R.modify _sigma (_ `List.snoc` (name /\ term'))
+        modify_ $ R.modify _sigma (List.Cons (name /\ term'))
         go rule
       go (G.PremiseRule premise rule) = pure {premise, rule}
       go (G.ConclusionRule _prop) = bug "[normalize] Cannot normalize a ConclusionRule"

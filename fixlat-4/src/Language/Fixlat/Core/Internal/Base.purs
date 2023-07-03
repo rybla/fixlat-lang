@@ -102,6 +102,9 @@ instance Pretty Patch where
 -- | An instantiated rule is a rule that has been instantiated with a
 -- | quantification context and a substitution. It only appears during
 -- | generation.
+-- |
+-- | Note that `gamma` and `sigma` are stored in reverse order of introductions,
+-- | since we want the most inner introductions to be found before outer ones.
 newtype InstRule = InstRule
   { originalRule :: G.Rule
   , gamma :: QuantCtx
@@ -116,6 +119,9 @@ instance Make InstRule G.Rule where
     , rule: originalRule }
 
 -- | A normalized instantiated rule has a premise at its head.
+-- |
+-- | Note that `gamma` and `sigma` are stored in reverse order of introductions,
+-- | since we want the most inner introductions to be found before outer ones.
 newtype NormInstRule = NormInstRule
   { originalRule :: G.Rule
   , gamma :: QuantCtx

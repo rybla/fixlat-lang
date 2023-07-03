@@ -2,7 +2,6 @@ module Language.Fixlat.Core.Internal.Substitution where
 
 import Language.Fixlat.Core.Internal.Base
 import Prelude
-
 import Data.Map as Map
 
 class Substitutable a where
@@ -10,9 +9,9 @@ class Substitutable a where
 
 instance Substitutable InstRule where
   substitute sigma (InstRule rule) = InstRule rule
-    { sigma = Map.union sigma rule.sigma }
+    { sigma = sigma <> rule.sigma }
 
 instance Substitutable NormInstRule where
   substitute sigma (NormInstRule rule) = NormInstRule rule
-    { sigma = Map.union sigma rule.sigma }
+    { sigma = sigma <> rule.sigma }
 

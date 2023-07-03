@@ -1,10 +1,12 @@
 module Language.Fixlat.Core.Internal.Generate (generate) where
 
 import Data.Tuple.Nested
+import Language.Fixlat.Core.Internal.Base
 import Prelude
 
 import Control.Assert (assertI)
 import Control.Assert.Assertions (keyOfMap)
+import Control.Bug (bug)
 import Control.Debug as Debug
 import Control.Monad.State (execStateT, modify, modify_)
 import Data.Array as Array
@@ -18,15 +20,16 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.Traversable (for, for_, traverse, traverse_)
+import Data.TraversableWithIndex (traverseWithIndex)
 import Effect.Class (class MonadEffect)
 import Hole (hole)
 import Language.Fixlat.Core.Grammar as G
-import Language.Fixlat.Core.Internal.Base
 import Language.Fixlat.Core.Internal.Database as Database
 import Language.Fixlat.Core.Internal.Normalization (normalize)
 import Language.Fixlat.Core.Internal.Queue as Queue
 import Language.Fixlat.Core.ModuleT (ModuleT, getModuleCtx)
 import Record as R
+import Text.Pretty (pretty, ticks)
 
 --------------------------------------------------------------------------------
 -- Generate
@@ -45,9 +48,11 @@ generate (Database initialProps) fixpointSpecName = do
 
   rules <- (unwrap moduleCtx.module_).rules #
     Map.filterWithKey (\ruleName _ -> ruleName `Array.elem` ((unwrap fixpointSpec).ruleNames)) >>>
-    Map.values >>>
     map (make :: _ -> InstRule) >>>
-    traverse normalize
+    traverseWithIndex (\ruleName rule -> normalize rule >>= case _ of
+      Left err -> bug $ "Failed to normalize module rule " <> ticks (pretty ruleName) <> ": " <> err
+      Right rule' -> pure rule') >>>
+    map Map.values
 
   let queue = do
         let axioms = (unwrap moduleCtx.module_).axioms #
@@ -59,13 +64,14 @@ generate (Database initialProps) fixpointSpecName = do
 
   let comparePatch = const <<< const $ GT
 
-  let env =
+  let 
+    env :: FixpointEnv
+    env =
         { gas: moduleCtx.initialGas 
         , database: emptyDatabase
         , rules
         , queue 
         , comparePatch }
-        :: FixpointEnv
 
   env' <- execStateT loop env
 
@@ -98,7 +104,7 @@ loop = do
           patches #
             ( -- learn the new patches
               traverse Database.learnPatch >=>
-              --- enqueue the new patches
+              --- also, enqueue the new patches
               traverse_ Queue.insert <<< merge ) 
           loop
   where

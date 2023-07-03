@@ -1,24 +1,20 @@
 module Language.Fixlat.Core.Internal.Database where
 
-import Data.Either.Nested
-import Data.Tuple.Nested
+import Data.Either.Nested (type (\/))
+import Control.Monad.Trans.Class (lift)
 import Language.Fixlat.Core.Internal.Base
 import Prelude
-
+import Utility (anyListM, (<$$>))
 import Control.Debug as Debug
-import Control.Monad.Reader (ask, asks, lift, runReaderT)
-import Control.Monad.State (gets, modify, modify_)
-import Data.Either (Either(..))
-import Data.Foldable (for_)
+import Control.Monad.State (gets, modify_)
+import Data.Either (Either(..), either, isRight)
 import Data.List (List(..), (:))
 import Data.List as List
-import Data.List.Types (NonEmptyList)
-import Data.Maybe (Maybe(..))
+import Data.Make (make)
 import Data.Traversable (for)
-import Data.Unfoldable as Unfoldable
 import Effect.Class (class MonadEffect)
-import Hole (hole)
 import Language.Fixlat.Core.Grammar as G
+import Language.Fixlat.Core.Internal.Normalization (normalize)
 import Language.Fixlat.Core.Internal.Substitution (substitute)
 import Language.Fixlat.Core.Internal.Subsumption (subsumes)
 import Language.Fixlat.Core.Internal.Unification (unify)
@@ -81,25 +77,27 @@ applyNormInstRule :: forall m. MonadEffect m =>
   GenerateT m (List Patch)
 applyNormInstRule rule = do
   Database props <- gets _.database
-  List.foldMap Unfoldable.fromMaybe <$> 
-    for props \prop -> hole "TODO"
+  List.foldMap (either (const Nil) List.singleton) <$> 
+    for props \prop -> applyNormInstRuleToProposition rule prop
 
+-- | Apply a rule to a proposition, yielding the resulting patch if applicable.
 applyNormInstRuleToProposition :: forall m. MonadEffect m =>
   NormInstRule ->
   G.ConcreteProposition ->
-  GenerateT m (Maybe Patch)
+  GenerateT m (String \/ Patch)
 applyNormInstRuleToProposition (NormInstRule rule) prop = do
   unify rule.premise prop >>= case _ of
-    Left err -> pure Nothing
+    Left err -> pure (Left err)
     Right sigma -> do
-      let rule' = substitute sigma (NormInstRule rule)
-      -- • normalize rest of rule
-      -- normRule
-      -- normRule 
-      hole "TODO"
+      let NormInstRule rule' = substitute sigma (NormInstRule rule)
+      ApplyPatch <$$> lift (normalize (make rule'.rule :: InstRule))
+      -- ?a $ normalize (make rule'.rule :: InstRule)
 
+-- | Check if a rule can be applied to a proposition.
 canApplyNormInstRuleToProposition :: forall m. MonadEffect m =>
   NormInstRule ->
   G.ConcreteProposition ->
   GenerateT m Boolean
-canApplyNormInstRuleToProposition = hole "canApplyNormInstRuleToProposition"
+canApplyNormInstRuleToProposition rule prop =
+  applyNormInstRuleToProposition rule prop <#>
+    isRight
