@@ -1,6 +1,7 @@
 module Language.Fixlat.Core.Internal.Base where
 
 import Prelude
+import Data.Tuple.Nested
 import Control.Monad.State (StateT, modify)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as Array
@@ -31,7 +32,7 @@ liftGenerateT = lift
 type FixpointEnv =
   { gas :: Int
   , database :: Database
-  , rules :: List NormRule
+  , rules :: List NormInstRule
   , queue :: Queue
   , comparePatch :: Patch -> Patch -> Ordering
   }
@@ -84,7 +85,7 @@ instance Pretty Queue where
 --------------------------------------------------------------------------------
 
 data Patch
-  = ApplyPatch NormRule
+  = ApplyPatch NormInstRule
   | ConclusionPatch G.ConcreteProposition
 
 derive instance Generic Patch _
@@ -95,37 +96,46 @@ instance Pretty Patch where
   pretty (ConclusionPatch prop) = "conclude: " <> pretty prop
 
 --------------------------------------------------------------------------------
--- Rule
+-- InstRule, NormInstRule
 --------------------------------------------------------------------------------
 
-newtype Rule = Rule
+-- | An instantiated rule is a rule that has been instantiated with a
+-- | quantification context and a substitution. It only appears during
+-- | generation.
+newtype InstRule = InstRule
   { originalRule :: G.Rule
-  , gamma :: G.QuantCtx
-  , sigma :: G.TermSub
+  , gamma :: QuantCtx
+  , sigma :: TermSub
   , rule :: G.Rule }
 
-instance Make Rule G.Rule where
-  make originalRule = Rule
+instance Make InstRule G.Rule where
+  make originalRule = InstRule
     { originalRule
-    , gamma: []
-    , sigma: Map.empty
+    , gamma: mempty
+    , sigma: mempty
     , rule: originalRule }
 
---------------------------------------------------------------------------------
--- NormRule
---------------------------------------------------------------------------------
-
-newtype NormRule = NormRule
+-- | A normalized instantiated rule has a premise at its head.
+newtype NormInstRule = NormInstRule
   { originalRule :: G.Rule
-  , gamma :: Array G.Quantification
-  , sigma :: G.TermSub
+  , gamma :: QuantCtx
+  , sigma :: TermSub
   , premise :: G.SymbolicProposition
   , rule :: G.Rule }
 
-derive instance Newtype NormRule _
-derive newtype instance Show NormRule
-derive newtype instance Eq NormRule
+derive instance Newtype NormInstRule _
+derive newtype instance Show NormInstRule
+derive newtype instance Eq NormInstRule
 
-instance Pretty NormRule where
-  pretty (NormRule rule) = pretty rule.rule
+instance Pretty NormInstRule where
+  pretty (NormInstRule rule) = pretty rule.rule
 
+type TermSub = List (G.TermName /\ G.ConcreteTerm)
+
+emptyTermSub :: TermSub
+emptyTermSub = mempty
+
+type QuantCtx = List G.Quantification
+
+emptyQuantCtx :: QuantCtx
+emptyQuantCtx = mempty

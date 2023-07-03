@@ -269,9 +269,6 @@ instance Pretty Constructor where
     BoolConstructor x -> show x
     StringConstructor x -> show x
 
-type TermSub = Map.Map TermName ConcreteTerm
-type QuantCtx = Array Quantification
-
 -- substituteTerm :: TermSub -> SymbolicTerm -> SymbolicTerm
 -- substituteTerm sigma (ApplicationTerm fun tms ty) = ApplicationTerm fun (substituteTerm sigma <$> tms) ty
 -- substituteTerm sigma (ConstructorTerm prim tms ty) = ConstructorTerm prim (substituteTerm sigma <$> tms) ty

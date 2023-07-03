@@ -21,10 +21,10 @@ import Data.Traversable (for, for_, traverse, traverse_)
 import Effect.Class (class MonadEffect)
 import Hole (hole)
 import Language.Fixlat.Core.Grammar as G
-import Language.Fixlat.Core.Internal.Base (Database(..), FixpointEnv, GenerateT, Patch(..), Queue(..), _gas, decrementGasNonpositive, emptyDatabase)
+import Language.Fixlat.Core.Internal.Base
 import Language.Fixlat.Core.Internal.Database as Database
+import Language.Fixlat.Core.Internal.Normalization (normalize)
 import Language.Fixlat.Core.Internal.Queue as Queue
-import Language.Fixlat.Core.Internal.RuleNormalization (normRule)
 import Language.Fixlat.Core.ModuleT (ModuleT, getModuleCtx)
 import Record as R
 
@@ -46,8 +46,8 @@ generate (Database initialProps) fixpointSpecName = do
   rules <- (unwrap moduleCtx.module_).rules #
     Map.filterWithKey (\ruleName _ -> ruleName `Array.elem` ((unwrap fixpointSpec).ruleNames)) >>>
     Map.values >>>
-    map make >>>
-    traverse normRule
+    map (make :: _ -> InstRule) >>>
+    traverse normalize
 
   let queue = do
         let axioms = (unwrap moduleCtx.module_).axioms #
@@ -99,7 +99,7 @@ loop = do
             ( -- learn the new patches
               traverse Database.learnPatch >=>
               --- enqueue the new patches
-              traverse_ Database.enqueuePatch <<< merge ) 
+              traverse_ Queue.insert <<< merge ) 
           loop
   where
   end = do

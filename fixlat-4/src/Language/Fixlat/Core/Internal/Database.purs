@@ -19,7 +19,9 @@ import Data.Unfoldable as Unfoldable
 import Effect.Class (class MonadEffect)
 import Hole (hole)
 import Language.Fixlat.Core.Grammar as G
+import Language.Fixlat.Core.Internal.Substitution (substitute)
 import Language.Fixlat.Core.Internal.Subsumption (subsumes)
+import Language.Fixlat.Core.Internal.Unification (unify)
 import Record as R
 import Type.Proxy (Proxy(..))
 import Utility (anyListM)
@@ -57,7 +59,7 @@ learnPatch (ConclusionPatch prop) =
       -- yield all the rules that could apply to this prop
       rules <- gets _.rules
       Right <<< List.concat <$> 
-        for rules \rule -> canApplyNormRuleToProposition rule prop >>= if _
+        for rules \rule -> canApplyNormInstRuleToProposition rule prop >>= if _
           then pure (List.singleton (ApplyPatch rule))
           else pure Nil
 learnPatch (ApplyPatch rule) = do
@@ -71,19 +73,33 @@ learnPatch (ApplyPatch rule) = do
       pure (Left Proxy)
     else do
       modify_ $ R.modify _rules (rule : _)
-      Right <$> applyNormRule rule
+      Right <$> applyNormInstRule rule
 
 -- | Apply a rule to the current database, yielding the resulting patches.
-applyNormRule :: forall m. MonadEffect m =>
-  NormRule ->
+applyNormInstRule :: forall m. MonadEffect m =>
+  NormInstRule ->
   GenerateT m (List Patch)
-applyNormRule rule = do
+applyNormInstRule rule = do
   Database props <- gets _.database
   List.foldMap Unfoldable.fromMaybe <$> 
     for props \prop -> hole "TODO"
 
-canApplyNormRuleToProposition :: forall m. MonadEffect m =>
-  NormRule ->
+applyNormInstRuleToProposition :: forall m. MonadEffect m =>
+  NormInstRule ->
+  G.ConcreteProposition ->
+  GenerateT m (Maybe Patch)
+applyNormInstRuleToProposition (NormInstRule rule) prop = do
+  unify rule.premise prop >>= case _ of
+    Left err -> pure Nothing
+    Right sigma -> do
+      let rule' = substitute sigma (NormInstRule rule)
+      -- • normalize rest of rule
+      -- normRule
+      -- normRule 
+      hole "TODO"
+
+canApplyNormInstRuleToProposition :: forall m. MonadEffect m =>
+  NormInstRule ->
   G.ConcreteProposition ->
   GenerateT m Boolean
-canApplyNormRuleToProposition = hole "canApplyNormRuleToProposition"
+canApplyNormInstRuleToProposition = hole "canApplyNormInstRuleToProposition"

@@ -6,36 +6,55 @@ import Data.Tuple.Nested
 import Language.Fixlat.Core.Grammar
 import Language.Fixlat.Core.Internal.Base
 import Prelude
-import Control.Monad.Except (ExceptT)
-import Control.Monad.Reader (ReaderT)
-import Control.Monad.State (StateT)
+
+import Control.Monad.Except (ExceptT, runExceptT)
+import Control.Monad.Reader (ReaderT, runReaderT)
+import Control.Monad.State (StateT, runStateT)
+import Data.Either (Either(..))
 import Data.Map as Map
+import Data.String as String
 import Hole (hole)
-import Language.Fixlat.Core.ModuleT (ModuleT)
+import Text.Pretty (class Pretty, indent, pretty, ticks, (<\>))
 
 --------------------------------------------------------------------------------
 -- UnifyT
 --------------------------------------------------------------------------------
 
-type UnifyT m a = ReaderT Ctx (ExceptT String (StateT Env (ModuleT m))) a
+type UnifyT m a = ExceptT String (StateT Env (GenerateT m)) a
 
-liftUnifyT :: forall m a. Monad m => ModuleT m a -> UnifyT m a
-liftUnifyT = lift >>> lift >>> lift
+unify :: forall m x y. Monad m => Unifiable x y => Pretty x => Pretty y => 
+  x -> y -> GenerateT m (String \/ Env)
+unify x y = runUnifyT (unify' x y) >>= case _ of
+  sigma /\ Left err -> pure $ Left $
+    "Unification error when attempting to unify " <> ticks (pretty x) <> " with " <> ticks (pretty y) <> ":\n\n" <>
+    indent
+    ( "Unification error: " <> err <> "\n\n" <>
+      "Current substitution:" <\> indent (pretty sigma) )
+  sigma /\ Right _ -> pure $ Right sigma
 
-type Ctx = 
-  { originMessage :: String
-  , gamma :: QuantCtx }
+runUnifyT :: forall m a. Monad m => UnifyT m a -> GenerateT m (Env /\ (String \/ a))
+runUnifyT m = runStateT (runExceptT m) Map.empty >>= case _ of
+  Left err /\ sigma -> pure $
+    (sigma /\ _) $
+    Left $
+      "Unification error: " <> err <> "\n\n" <>
+      "Current substitution:" <\> indent (pretty sigma)
+  Right a /\ sigma -> pure $
+    sigma /\ Right a
+
+liftUnifyT :: forall m a. Monad m => GenerateT m a -> UnifyT m a
+liftUnifyT = lift >>> lift
 
 type Env = TermSub
 
 class Unifiable x y | x -> y where
-  unify :: forall m. Monad m => x -> y -> UnifyT m Unit
+  unify' :: forall m. Monad m => x -> y -> UnifyT m Unit
 
 instance Unifiable SymbolicProposition ConcreteProposition where
-  unify expected actual = hole "unifyProposition"
+  unify' expected actual = hole "unifyProposition"
 
 instance Unifiable SymbolicTerm ConcreteTerm where
-  unify expected actual = hole "unifyTerm"
+  unify' expected actual = hole "unifyTerm"
 
 {-
 import Data.Either.Nested
@@ -57,16 +76,16 @@ import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Tuple (snd, uncurry)
 import Hole (hole)
-import Language.Fixlat.Core.ModuleT (ModuleT)
+import Language.Fixlat.Core.GenerateT (GenerateT)
 import Text.Pretty (pretty, ticks)
 
 --------------------------------------------------------------------------------
 -- UnifyT
 --------------------------------------------------------------------------------
 
-type UnifyT m a = ReaderT Ctx (ExceptT String (StateT Sub (ModuleT m))) a
+type UnifyT m a = ReaderT Ctx (ExceptT String (StateT Sub (GenerateT m))) a
 
-liftUnifyT :: forall m a. Monad m => ModuleT m a -> UnifyT m a
+liftUnifyT :: forall m a. Monad m => GenerateT m a -> UnifyT m a
 liftUnifyT = lift >>> lift >>> lift
 
 -- !TODO actually the quantifiers shouldn't exactly be a map, since the order of
@@ -77,13 +96,13 @@ type Ctx =
 
 type TypingContext = Map.Map TermName Type
 
-unify :: forall m. Monad m => (SymbolicProposition /\ ConcreteProposition) \/ (SymbolicTerm /\ ConcreteTerm) -> ModuleT m (String \/ Sub)
+unify :: forall m. Monad m => (SymbolicProposition /\ ConcreteProposition) \/ (SymbolicTerm /\ ConcreteTerm) -> GenerateT m (String \/ Sub)
 unify initial = map snd <$> runUnifyT {initial} do
   case initial of
     Left (expected /\ actual) -> unifyProposition expected actual
     Right (expected /\ actual) -> unifyTerm expected actual
 
-runUnifyT :: forall m a. Monad m => Ctx -> UnifyT m a -> ModuleT m (String \/ (a /\ Sub))
+runUnifyT :: forall m a. Monad m => Ctx -> UnifyT m a -> GenerateT m (String \/ (a /\ Sub))
 runUnifyT ctx m = runStateT (runExceptT (runReaderT m ctx)) Map.empty >>= case _ of
   Left err /\ sigma -> pure $ Left $ 
     "Unification error: " <> err <> "\n\n" <>

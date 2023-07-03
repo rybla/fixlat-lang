@@ -57,17 +57,17 @@ instance Make Rule G.Rule where
     , rule: originalRule }
 
 --------------------------------------------------------------------------------
--- NormRule
+-- NormInstRule
 --------------------------------------------------------------------------------
 
-newtype NormRule = NormRule
+newtype NormInstRule = NormInstRule
   { originalRule :: G.Rule
   , quantifications :: Array G.Quantification
   , sigma :: G.TermSub
   , premise :: G.SymbolicProposition
   , rule :: G.Rule }
 
-normRule :: forall m. MonadEffect m => Rule -> ModuleT m NormRule
+normRule :: forall m. MonadEffect m => Rule -> ModuleT m NormInstRule
 normRule (Rule _rule) = do
   let
     go :: G.Rule -> StateT {quantificationsRev :: Array G.Quantification, sigma :: G.TermSub} (ModuleT m) (G.SymbolicProposition /\ G.Rule)
@@ -86,15 +86,15 @@ normRule (Rule _rule) = do
 
   -- premise /\ rule = runState (go _rule.originalRule) {quantificationsRev: _rule.quantifications, sigma: _rule.sigma}
   
-  pure $ NormRule
+  pure $ NormInstRule
     { originalRule: _rule.originalRule
     , quantifications: _rule.quantifications
     , sigma: hole "sigma"
     , premise: hole "premise" -- _rule.premise
     , rule: hole "rule" }
 
--- instance Make NormRule G.Rule where
---   make originalRule = NormRule
+-- instance Make NormInstRule G.Rule where
+--   make originalRule = NormInstRule
 --     { originalRule
 --     , quantifications: Array.reverse quantificationsRev
 --     , sigma: Map.empty
@@ -112,12 +112,12 @@ normRule (Rule _rule) = do
 
 --     (premise /\ rule) /\ {quantificationsRev, sigma} = runState (go originalRule) {quantificationsRev: [], sigma: Map.empty}
 
-derive instance Newtype NormRule _
-derive newtype instance Show NormRule
-derive newtype instance Eq NormRule
+derive instance Newtype NormInstRule _
+derive newtype instance Show NormInstRule
+derive newtype instance Eq NormInstRule
 
-instance Pretty NormRule where
-  pretty (NormRule rule) = pretty rule.rule
+instance Pretty NormInstRule where
+  pretty (NormInstRule rule) = pretty rule.rule
 
 -- | Internal fixpoint implementation.
 fixpoint :: forall m. MonadEffect m => Database -> G.FixpointSpecName -> ModuleT m Database
@@ -186,10 +186,10 @@ liftFixpointT = lift
 type FixpointEnv =
   { gas :: Int
   , database :: Database
-  , rules :: Map.Map G.RuleName NormRule
+  , rules :: Map.Map G.RuleName NormInstRule
     -- This is organized to allow quickly "looking up" partially-instantiated
     -- rules that can be applied to a given proposition.
-  , partialRules :: Array NormRule
+  , partialRules :: Array NormInstRule
   , queue :: Queue
   , comparePatch :: Patch -> Patch -> Ordering
   }
@@ -211,7 +211,7 @@ rules are put at front of queue immediately.
 -}
 
 data Patch
-  = ApplyPatch NormRule
+  = ApplyPatch NormInstRule
   | ConclusionPatch G.ConcreteProposition
 
 derive instance Generic Patch _
@@ -221,13 +221,13 @@ instance Pretty Patch where
   pretty (ApplyPatch rule) = "apply:" <\> indent (pretty rule)
   pretty (ConclusionPatch prop) = "conclude: " <> pretty prop
 
-getAllRules :: forall m. MonadEffect m => FixpointT m (Array NormRule)
+getAllRules :: forall m. MonadEffect m => FixpointT m (Array NormInstRule)
 getAllRules = do
   rules <- gets _.rules <#> Array.fromFoldable <<< Map.values
   partialRules <- gets _.partialRules
   pure $ rules <> partialRules
 
-insertRule :: forall m. MonadEffect m => NormRule -> FixpointT m Unit
+insertRule :: forall m. MonadEffect m => NormInstRule -> FixpointT m Unit
 insertRule rule = modify_ $ R.modify _partialRules (rule Array.: _)
 
 --------------------------------------------------------------------------------
@@ -376,47 +376,47 @@ learn (ApplyPatch rule) = do
   Array.concat <$> for candidates \candidate -> do
     applyRule rule candidate
 
-applyRule :: forall m. MonadEffect m => NormRule -> G.ConcreteProposition -> FixpointT m (Array Patch)
-applyRule (NormRule _rule) prop' = case _rule.rule of
-  G.FilterRule _ _ -> bug $ "[applyRule] Cannot apply a rule that starts with a filter: " <> pretty (NormRule _rule)
-  G.ConclusionRule _ -> bug $ "[applyRule] Cannot apply a rule that starts with a conclusion: " <> pretty (NormRule _rule)
+applyRule :: forall m. MonadEffect m => NormInstRule -> G.ConcreteProposition -> FixpointT m (Array Patch)
+applyRule (NormInstRule _rule) prop' = case _rule.rule of
+  G.FilterRule _ _ -> bug $ "[applyRule] Cannot apply a rule that starts with a filter: " <> pretty (NormInstRule _rule)
+  G.ConclusionRule _ -> bug $ "[applyRule] Cannot apply a rule that starts with a conclusion: " <> pretty (NormInstRule _rule)
   G.QuantificationRule quant rule ->
     applyRule 
-      (NormRule _rule 
+      (NormInstRule _rule 
         { quantifications = Array.snoc _rule.quantifications quant
         , rule = rule }) 
       prop'
   G.LetRule name term rule -> do
     term' <- evaluateTerm $ assertI G.concreteTerm term
     applyRule 
-      (NormRule _rule
+      (NormInstRule _rule
         { rule = G.substituteRule (Map.singleton name term') rule })
       prop'
   G.PremiseRule prem rule ->
     -- does the premise unify with the candidate?
     liftFixpointT (unify (Left (prem /\ prop'))) >>= case _ of
       Left _err -> pure []
-      Right sigma -> go (NormRule _rule {rule = G.substituteRule sigma rule})
+      Right sigma -> go (NormInstRule _rule {rule = G.substituteRule sigma rule})
         where
-        go (NormRule _rule'@{rule: G.QuantificationRule quant rule'}) = 
-          go (NormRule _rule'
+        go (NormInstRule _rule'@{rule: G.QuantificationRule quant rule'}) = 
+          go (NormInstRule _rule'
             { quantifications = Array.snoc _rule.quantifications quant
             , rule = rule' }) 
-        go (NormRule _rule'@{rule: G.LetRule name term rule'}) = do
+        go (NormInstRule _rule'@{rule: G.LetRule name term rule'}) = do
           term' <- evaluateTerm $ assertI G.concreteTerm term
-          go (NormRule _rule'
+          go (NormInstRule _rule'
             { rule = G.substituteRule (Map.singleton name term') rule' })
-        go (NormRule _rule'@{rule: G.FilterRule cond rule''}) =
+        go (NormInstRule _rule'@{rule: G.FilterRule cond rule''}) =
           checkCondition (assertI G.concreteTerm $ G.substituteTerm sigma cond) >>= if _
-            then pure [ApplyPatch (NormRule _rule' {rule = rule''})]
+            then pure [ApplyPatch (NormInstRule _rule' {rule = rule''})]
             else pure []
-        go (NormRule _rule'@{rule: G.ConclusionRule conc}) = do
+        go (NormInstRule _rule'@{rule: G.ConclusionRule conc}) = do
           let conc' = assertI G.concreteProposition conc
           pure [ConclusionPatch conc']
         go _rule' = pure [ApplyPatch _rule']
 
-tryApplyRule :: forall m. MonadEffect m => NormRule -> G.ConcreteProposition -> FixpointT m (Maybe NormRule)
-tryApplyRule (NormRule _rule) prop' = 
+tryApplyRule :: forall m. MonadEffect m => NormInstRule -> G.ConcreteProposition -> FixpointT m (Maybe NormInstRule)
+tryApplyRule (NormInstRule _rule) prop' = 
   -- does the premise unify with the candidate?
   liftFixpointT (unify (Left (_rule.premise /\ prop'))) >>= case _ of
     Left _err -> pure Nothing

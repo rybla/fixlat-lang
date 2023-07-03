@@ -4,7 +4,6 @@ import Control.Monad.Trans.Class
 import Data.Either.Nested
 import Data.Tuple.Nested
 import Language.Fixlat.Core.Grammar
-import Language.Fixlat.Core.Internal.Base (Rule) as Base
 import Language.Fixlat.Core.Internal.Base
 import Prelude
 import Control.Monad.Except (ExceptT)
@@ -23,11 +22,11 @@ instance Subsumable Patch where
   subsumes _ _ = hole "TODO"
   isSubsumed _ = hole "TODO"
 
-instance Subsumable Base.Rule where
+instance Subsumable InstRule where
   subsumes _ _ = hole "TODO"
   isSubsumed _ = hole "TODO"
 
-instance Subsumable NormRule where
+instance Subsumable NormInstRule where
   subsumes _ _ = hole "TODO"
   isSubsumed _ = hole "TODO"
 
