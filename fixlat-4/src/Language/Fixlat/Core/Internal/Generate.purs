@@ -85,10 +85,6 @@ generate (Database initialProps) fixpointSpecName = do
 loop :: forall m. MonadEffect m => GenerateT m Unit
 loop = do
   Debug.debugA $ "[loop] BEGIN"
-  -- • Decrement gas. If gas is 0, then done.
-  -- • If no more patches in queue, then done, otherwise pop the next patch.
-  -- • Learn the patch, yielding new patches.
-  -- • Insert the new patches into the queue.
   decrementGasNonpositive >>= if _
     then do
       Debug.debugA "[loop] no more gas"
