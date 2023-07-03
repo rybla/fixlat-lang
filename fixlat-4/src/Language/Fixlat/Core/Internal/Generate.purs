@@ -98,9 +98,7 @@ loop = do
           Debug.debugA $ "[loop] new patches count: " <> show (NonemptyList.length patches)
           let merge = map (either (const Nil) identity) >>> NonemptyList.toList >>> List.concat
           patches #
-            ( -- learn the new patches
-              traverse Database.learnPatch >=>
-              --- also, enqueue the new patches
+            ( traverse Database.learnPatch >=>
               traverse_ Queue.insert <<< merge ) 
           loop
   where
