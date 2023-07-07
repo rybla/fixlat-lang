@@ -92,7 +92,7 @@ applyNormInstRuleToProposition (NormInstRule rule) prop = do
     Left err -> pure (Left err)
     Right sigma -> do
       let NormInstRule rule' = substitute sigma (NormInstRule rule)
-      ApplyPatch <$$> lift (runExceptT (normalize (make rule'.rule :: InstRule)))
+      ApplyPatch <$$> normalize (make rule'.rule :: InstRule)
 
 -- | Check if a rule can be applied to a proposition.
 canApplyNormInstRuleToProposition :: forall m. MonadEffect m =>

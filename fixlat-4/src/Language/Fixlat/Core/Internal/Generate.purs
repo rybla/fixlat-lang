@@ -50,7 +50,7 @@ generate (Database initialProps) fixpointSpecName = do
   rules <- (unwrap moduleCtx.module_).rules #
     Map.filterWithKey (\ruleName _ -> ruleName `Array.elem` ((unwrap fixpointSpec).ruleNames)) >>>
     map (make :: _ -> InstRule) >>>
-    traverseWithIndex (\ruleName rule -> runExceptT (normalize rule) >>= case _ of
+    traverseWithIndex (\ruleName rule -> normalize rule >>= case _ of
       Left err -> bug $ "Failed to normalize module rule " <> ticks (pretty ruleName) <> ": " <> err
       Right rule' -> pure rule') >>>
     map Map.values

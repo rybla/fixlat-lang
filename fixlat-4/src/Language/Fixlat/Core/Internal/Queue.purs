@@ -15,7 +15,7 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (over, under)
 import Effect.Class (class MonadEffect)
 import Hole (hole)
-import Language.Fixlat.Core.Internal.Subsumption (isSubsumed)
+import Language.Fixlat.Core.Internal.Subsumption (isSubsumedPatch)
 import Record as R
 import Type.Proxy (Proxy(..))
 
@@ -31,7 +31,7 @@ pop = do
       modify_ $ R.set _queue (Queue queue')
       patches # 
         ( --- ignore subsumed patches
-          NonemptyList.filterM isSubsumed >=> 
+          NonemptyList.filterM isSubsumedPatch >=> 
           NonEmptyList.fromList >>> case _ of
             Nothing -> do
               Debug.debugA "[pop] ignoring subsumed patches"
