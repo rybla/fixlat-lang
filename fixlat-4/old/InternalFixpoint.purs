@@ -150,7 +150,7 @@ fixpoint (Database initialProps) fixpointSpecName = do
     normRule `traverse` rules
 
   let 
-    env :: FixpointEnv
+    env :: GenerateEnv
     env = 
       { gas: initialGas
       , database: Database []
@@ -178,12 +178,12 @@ fixpoint (Database initialProps) fixpointSpecName = do
 -- FixpointT
 --------------------------------------------------------------------------------
 
-type FixpointT m = StateT FixpointEnv (ModuleT m)
+type FixpointT m = StateT GenerateEnv (ModuleT m)
 
 liftFixpointT :: forall m a. MonadEffect m => ModuleT m a -> FixpointT m a
 liftFixpointT = lift
 
-type FixpointEnv =
+type GenerateEnv =
   { gas :: Int
   , database :: Database
   , rules :: Map.Map G.RuleName NormInstRule

@@ -1,13 +1,14 @@
 module Language.Fixlat.Core.Internal.Database where
 
-import Data.Either.Nested (type (\/))
-import Control.Monad.Trans.Class (lift)
 import Language.Fixlat.Core.Internal.Base
 import Prelude
-import Utility (anyListM, (<$$>))
+
 import Control.Debug as Debug
+import Control.Monad.Except (runExceptT)
 import Control.Monad.State (gets, modify_)
+import Control.Monad.Trans.Class (lift)
 import Data.Either (Either(..), either, isRight)
+import Data.Either.Nested (type (\/))
 import Data.List (List(..), (:))
 import Data.List as List
 import Data.Make (make)
@@ -21,6 +22,7 @@ import Language.Fixlat.Core.Internal.Unification (unify)
 import Record as R
 import Type.Proxy (Proxy(..))
 import Utility (anyListM)
+import Utility (anyListM, (<$$>))
 
 -- | Insert a proposition into the current database.
 insertProposition :: forall m. MonadEffect m => 
@@ -90,8 +92,7 @@ applyNormInstRuleToProposition (NormInstRule rule) prop = do
     Left err -> pure (Left err)
     Right sigma -> do
       let NormInstRule rule' = substitute sigma (NormInstRule rule)
-      ApplyPatch <$$> lift (normalize (make rule'.rule :: InstRule))
-      -- ?a $ normalize (make rule'.rule :: InstRule)
+      ApplyPatch <$$> lift (runExceptT (normalize (make rule'.rule :: InstRule)))
 
 -- | Check if a rule can be applied to a proposition.
 canApplyNormInstRuleToProposition :: forall m. MonadEffect m =>

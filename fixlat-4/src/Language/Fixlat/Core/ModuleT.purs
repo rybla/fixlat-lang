@@ -7,8 +7,7 @@ import Control.Monad.Reader (Reader, ReaderT(..), ask, runReader)
 import Control.Monad.Trans.Class (class MonadTrans)
 import Type.Proxy (Proxy(..))
 
-newtype ModuleT :: forall k. (k -> Type) -> k -> Type
-newtype ModuleT m a = ModuleT (ReaderT ModuleCtx m a)
+newtype ModuleT (m :: Type -> Type) a = ModuleT (ReaderT ModuleCtx m a)
 
 runModuleT (ModuleT m) = m
 

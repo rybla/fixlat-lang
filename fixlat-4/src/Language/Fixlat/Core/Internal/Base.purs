@@ -1,7 +1,9 @@
 module Language.Fixlat.Core.Internal.Base where
 
-import Prelude
 import Data.Tuple.Nested
+import Prelude
+
+import Control.Monad.Reader (ReaderT)
 import Control.Monad.State (StateT, modify)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as Array
@@ -24,12 +26,12 @@ import Type.Proxy (Proxy(..))
 -- GenerateT
 --------------------------------------------------------------------------------
 
-type GenerateT m = StateT FixpointEnv (ModuleT m)
+type GenerateT m = ReaderT GenerateCtx (StateT GenerateEnv (ModuleT m))
 
 liftGenerateT :: forall m a. MonadEffect m => ModuleT m a -> GenerateT m a
-liftGenerateT = lift
+liftGenerateT = lift <<< lift
 
-type FixpointEnv =
+type GenerateEnv =
   { gas :: Int
   , database :: Database
   , rules :: List NormInstRule
@@ -37,11 +39,16 @@ type FixpointEnv =
   , comparePatch :: Patch -> Patch -> Ordering
   }
 
+type GenerateCtx =
+  { sigma :: TermSub
+  }
+
 _gas = Proxy :: Proxy "gas"
 _database = Proxy :: Proxy "database"
 _rules = Proxy :: Proxy "rules"
 _queue = Proxy :: Proxy "queue"
 _comparePatch = Proxy :: Proxy "comparePatch"
+_sigma = Proxy :: Proxy "sigma"
 
 -- | Decrements gas, and returns true if gas is nonpositive.
 decrementGasNonpositive :: forall m. MonadEffect m => GenerateT m Boolean
@@ -117,6 +124,10 @@ instance Make InstRule G.Rule where
     , gamma: mempty
     , sigma: mempty
     , rule: originalRule }
+
+derive instance Newtype InstRule _
+derive newtype instance Show InstRule
+derive newtype instance Eq InstRule
 
 -- | A normalized instantiated rule has a premise at its head.
 -- |

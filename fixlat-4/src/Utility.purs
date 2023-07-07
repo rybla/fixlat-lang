@@ -2,8 +2,10 @@ module Utility where
 
 import Prelude
 
+import Data.Array as Array
 import Data.Foldable (class Foldable, foldM)
 import Data.List (List(..))
+import Data.Maybe (Maybe(..))
 
 churchIf a1 a2 = if _ then a1 else a2
 
@@ -19,3 +21,12 @@ anyListM f (Cons x xs) = f x >>= case _ of
   true -> anyListM f xs
   false -> pure false
 
+allArrayM :: forall m a. Monad m => (a -> m Boolean) -> Array a -> m Boolean
+allArrayM f xs = case Array.uncons xs of
+  Nothing -> pure true
+  Just {head: x, tail: xs'} -> f x >>= if _ then allArrayM f xs' else pure false 
+
+anyArrayM :: forall m a. Monad m => (a -> m Boolean) -> Array a -> m Boolean
+anyArrayM f xs = case Array.uncons xs of
+  Nothing -> pure false
+  Just {head: x, tail: xs'} -> f x >>= if _ then pure true else anyArrayM f xs'

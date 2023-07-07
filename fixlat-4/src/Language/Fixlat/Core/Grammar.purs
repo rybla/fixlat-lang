@@ -86,6 +86,7 @@ data DataType
   | IntDataType
   | NatDataType
   | StringDataType
+  | SetDataType DataType
   | TupleDataType DataType DataType
 
 derive instance Generic DataType _
@@ -99,6 +100,7 @@ instance Pretty DataType where
     IntDataType -> "int"
     NatDataType -> "nat"
     StringDataType -> "string"
+    SetDataType ty -> parens ("set " <> pretty ty)
     TupleDataType ty1 ty2 -> parens (pretty ty1 <> ", " <> pretty ty2)
 
 -- | A LatticeType specifies a lattice ordering over a uniquely deTermined
@@ -109,7 +111,7 @@ data LatticeType
   | NatLatticeType
   | StringLatticeType
   | OpLatticeType LatticeType
-  | DiscreteLatticeType DataType
+  | PowerLatticeType DataType
   | TupleLatticeType TupleOrdering LatticeType LatticeType
 
 derive instance Generic LatticeType _
@@ -124,15 +126,13 @@ instance Pretty LatticeType where
     NatLatticeType -> "nat"
     StringLatticeType -> "string"
     OpLatticeType lty -> "op" <+> parens (pretty lty)
-    DiscreteLatticeType dty -> "discrete" <+> parens (pretty dty)
+    PowerLatticeType dty -> "power" <+> parens (pretty dty)
     TupleLatticeType LexicographicTupleOrdering lty1 lty2 -> parens (pretty lty1 <> ", " <> pretty lty2)
     TupleLatticeType ParallelTupleOrdering lty1 lty2 -> parens (pretty lty1 <> "||" <> pretty lty2)
-    TupleLatticeType DiscreteTupleOrdering lty1 lty2 -> parens (pretty lty1 <> "&&" <> pretty lty2)
 
 data TupleOrdering
-  = LexicographicTupleOrdering
-  | ParallelTupleOrdering
-  | DiscreteTupleOrdering
+  = LexicographicTupleOrdering -- first component has precedence over second component
+  | ParallelTupleOrdering -- both components are checked together yielding incomparable on mismatch
 
 toDataType :: LatticeType -> DataType
 toDataType BoolLatticeType = BoolDataType
@@ -140,7 +140,7 @@ toDataType IntLatticeType = IntDataType
 toDataType NatLatticeType = NatDataType
 toDataType StringLatticeType = StringDataType
 toDataType (OpLatticeType lty) = toDataType lty
-toDataType (DiscreteLatticeType dty) = dty
+toDataType (PowerLatticeType dty) = dty
 toDataType (TupleLatticeType _ lty1 lty2) = TupleDataType (toDataType lty1) (toDataType lty2)
 
 derive instance Generic TupleOrdering _
@@ -254,6 +254,7 @@ data Constructor
   | IntConstructor Int
   | StringConstructor String
   | BoolConstructor Boolean
+  | SetConstructor
 
 derive instance Generic Constructor _
 instance Show Constructor where show x = genericShow x
@@ -268,6 +269,7 @@ instance Pretty Constructor where
     IntConstructor x -> show x
     BoolConstructor x -> show x
     StringConstructor x -> show x
+    SetConstructor -> "set"
 
 -- substituteTerm :: TermSub -> SymbolicTerm -> SymbolicTerm
 -- substituteTerm sigma (ApplicationTerm fun tms ty) = ApplicationTerm fun (substituteTerm sigma <$> tms) ty

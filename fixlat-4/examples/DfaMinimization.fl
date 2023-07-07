@@ -1,0 +1,69 @@
+// domain(partition node) = set node * set node
+
+mod Dfa where
+
+	dat node = Node Int
+	dat label = Label String
+	
+	// Labeled transitions between nodes.
+	rel Transitions : power (node * node * label)
+	gen in makeTransition (n1 n2 : node) (l : label) --> Transition {(n1, n2, l)}
+
+	// Start nodes. Typically, should only hold of one node. 
+  // Bottom: No nodes are starting nodes.
+	rel Starts : power node
+	gen in makeStart (n : node) --> Starts {n}
+
+	// // Accept nodes.
+	// rel Accepts : power node
+	// gen in makeAccept (n : node) --> Accepts {n}
+
+  rel AcceptsPartition : partition node
+  gen in makeAcceptsPartition (ns ns' : set node) --> AcceptsPartition (ns, ns')
+
+  rel Accepts : power node
+  rule acceptsAcceptsPartition = AcceptsPartition (ns, _) |- Accepts ns
+
+	mod Reachability where
+
+		// Nodes that are reachable from the start node.
+    // Bottom: No nodes are reachable.
+		rel Reachable : power node
+
+		rule startReachable =
+			Starts {n} |- Reachable {n}
+
+		rule transitionReachable = 
+			Reachable {n1}, Transition ({n1, n2, l}) |- Reachable {n1, n2}
+
+		gen fix
+
+		gen out isReachable (n : node) <-- Reachable {n}
+
+	mod Liveness where
+
+		// Nodes from which an accepting node can be reached. 
+    // Bottom: No nodes are distinguishable.
+		rel Live : power node
+
+		rule acceptLive =
+			Accepts {n} |- Live {n}
+
+		rule transitionLive =
+			Transition {(n1, n2, l)}, Live {n2} |- Live {n1, n2}
+
+		gen fix
+
+		gen out isLive (n : node) <== Live {n}
+
+	mod Distinguishability where
+
+		// Nodes that are distinguishable. 
+    // Bottom: No nodes are distinguishable.
+		rel Distinguishable : partition node
+
+    rule acceptsDistinguishable =
+      AcceptsPartition (accepts, nonaccepts) |-
+      Distinguishable (accepts, nonaccepts)
+
+    gen fix

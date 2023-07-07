@@ -1,0 +1,25 @@
+mod Set (a : type) where
+  // A set is defined by a relation `Element` which holds for each element of
+  // the set.
+
+  rel Element : power a
+  
+  gen in addElement (x : a) ==> Element {x}
+
+mod Example where
+  
+  // Create a new instance of the `Set` module, with type argument `int`. A 
+  // local module instance has its own independent database of facts. 
+  // Statically, this database is immutable from within `Example`. But, for each
+  // generated function in `Set`, there is a corresponding function generated 
+  // for `Example` that operates over the local instance. For example,
+  // `Set` has `gen in addElement`, and `Example` has `inst Xs = Set int`, so
+  // `Example` generates a hidden `gen in Xs.addElement` which operates over
+  // `Xs` database.
+  
+  inst Xs = Set int
+
+  inst Ys = Set int
+
+
+

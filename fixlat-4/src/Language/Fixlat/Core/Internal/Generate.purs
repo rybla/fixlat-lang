@@ -8,6 +8,7 @@ import Control.Assert (assertI)
 import Control.Assert.Assertions (keyOfMap)
 import Control.Bug (bug)
 import Control.Debug as Debug
+import Control.Monad.Except (runExceptT)
 import Control.Monad.State (execStateT, modify, modify_)
 import Data.Array as Array
 import Data.Either (Either(..), either)
@@ -49,7 +50,7 @@ generate (Database initialProps) fixpointSpecName = do
   rules <- (unwrap moduleCtx.module_).rules #
     Map.filterWithKey (\ruleName _ -> ruleName `Array.elem` ((unwrap fixpointSpec).ruleNames)) >>>
     map (make :: _ -> InstRule) >>>
-    traverseWithIndex (\ruleName rule -> normalize rule >>= case _ of
+    traverseWithIndex (\ruleName rule -> runExceptT (normalize rule) >>= case _ of
       Left err -> bug $ "Failed to normalize module rule " <> ticks (pretty ruleName) <> ": " <> err
       Right rule' -> pure rule') >>>
     map Map.values
@@ -65,7 +66,7 @@ generate (Database initialProps) fixpointSpecName = do
   let comparePatch = const <<< const $ GT
 
   let 
-    env :: FixpointEnv
+    env :: GenerateEnv
     env =
         { gas: moduleCtx.initialGas 
         , database: emptyDatabase
@@ -99,7 +100,7 @@ loop = do
           let merge = map (either (const Nil) identity) >>> NonemptyList.toList >>> List.concat
           patches #
             ( traverse Database.learnPatch >=>
-              traverse_ Queue.insert <<< merge ) 
+              merge >>> traverse_ Queue.insert ) 
           loop
   where
   end = do

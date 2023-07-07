@@ -39,6 +39,7 @@ pop = do
             Just patches' -> pure (Right patches')
         )
 
+-- TODO: actually use `comparePatch`
 insert :: forall m. MonadEffect m => 
   Patch -> 
   GenerateT m Unit
