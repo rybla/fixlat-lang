@@ -41,6 +41,7 @@ isSubsumedPatch (ApplyPatch rule) = do
 
 isSubsumedPatch (ConclusionPatch prop) = do
   Database props <- gets _.database
+  -- TODO: this is simpler now, since only one prop per relation
   props # anyListM \prop' -> subsumes prop prop'
 
 instance Subsumable NormInstRule where
@@ -92,11 +93,6 @@ subsumesConcreteTerm'
   (G.ConstructorTerm G.SucConstructor [n1] G.NatLatticeType)
   (G.ConstructorTerm G.SucConstructor [n2] G.NatLatticeType) = 
   subsumes n1 n2
-
-subsumesConcreteTerm'
-  (G.ConstructorTerm (G.IntConstructor i1) [] G.IntLatticeType) 
-  (G.ConstructorTerm (G.IntConstructor i2) [] G.IntLatticeType) =
-  pure $ i1 <= i2
 
 subsumesConcreteTerm'
   (G.ConstructorTerm (G.StringConstructor s1) [] G.StringLatticeType)

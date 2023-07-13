@@ -108,7 +108,6 @@ instance Pretty DataType where
 -- | underlying DataType.
 data LatticeType
   = BoolLatticeType
-  | IntLatticeType
   | NatLatticeType
   | StringLatticeType
   | OpLatticeType LatticeType
@@ -123,7 +122,6 @@ derive instance Ord LatticeType
 instance Pretty LatticeType where
   pretty = case _ of
     BoolLatticeType -> "bool"
-    IntLatticeType -> "int"
     NatLatticeType -> "nat"
     StringLatticeType -> "string"
     OpLatticeType lty -> "op" <+> parens (pretty lty)
@@ -137,7 +135,6 @@ data TupleOrdering
 
 toDataType :: LatticeType -> DataType
 toDataType BoolLatticeType = BoolDataType
-toDataType IntLatticeType = IntDataType
 toDataType NatLatticeType = NatDataType
 toDataType StringLatticeType = StringDataType
 toDataType (OpLatticeType lty) = toDataType lty
@@ -252,11 +249,14 @@ typeOfTerm (BoundTerm _ ty) = ty
 data Constructor 
   = ZeroConstructor
   | SucConstructor
+  | InfinityConstructor
   | TupleConstructor
   | IntConstructor Int
   | StringConstructor String
+  | ZetaConstructor
   | BoolConstructor Boolean
   | SetConstructor
+  | DomainConstructor -- set that contains everything
 
 derive instance Generic Constructor _
 instance Show Constructor where show x = genericShow x
@@ -267,11 +267,14 @@ instance Pretty Constructor where
   pretty = case _ of
     ZeroConstructor -> "zero"
     SucConstructor -> "suc"
+    InfinityConstructor -> "infinity"
     TupleConstructor -> "tuple"
     IntConstructor x -> show x
     BoolConstructor x -> show x
     StringConstructor x -> show x
+    ZetaConstructor -> "zeta"
     SetConstructor -> "set"
+    DomainConstructor -> "domain"
 
 -- substituteTerm :: TermSub -> SymbolicTerm -> SymbolicTerm
 -- substituteTerm sigma (ApplicationTerm fun tms ty) = ApplicationTerm fun (substituteTerm sigma <$> tms) ty
@@ -297,11 +300,37 @@ checkConcreteTerm = case _ of
 toSymbolicTerm :: forall ty. Term ty Void -> Term ty TermName
 toSymbolicTerm = rmap absurd
 
+-- the top bool
 trueTerm :: forall x. Term LatticeType x
 trueTerm = ConstructorTerm (BoolConstructor true) [] BoolLatticeType
 
+-- the bot bool
 falseTerm :: forall x. Term LatticeType x
 falseTerm = ConstructorTerm (BoolConstructor false) [] BoolLatticeType
+
+-- the bot nat
+zeroTerm :: forall x. Term LatticeType x
+zeroTerm = ConstructorTerm ZeroConstructor [] NatLatticeType
+
+-- the top nat
+infinityTerm :: forall x. Term LatticeType x
+infinityTerm = ConstructorTerm InfinityConstructor [] NatLatticeType
+
+-- the bot string
+epsilonTerm :: forall x. Term LatticeType x
+epsilonTerm = ConstructorTerm (StringConstructor "") [] StringLatticeType
+
+-- the top string
+zetaTerm :: forall x. Term LatticeType x
+zetaTerm = ConstructorTerm ZetaConstructor [] StringLatticeType
+
+-- the bot set
+nullTerm :: forall x. DataType -> Term LatticeType x
+nullTerm dat = ConstructorTerm SetConstructor [] (PowerLatticeType dat)
+
+-- the top set
+domainTerm :: forall x. DataType -> Term LatticeType x
+domainTerm dat = ConstructorTerm DomainConstructor [] (PowerLatticeType dat)
 
 --------------------------------------------------------------------------------
 -- Function

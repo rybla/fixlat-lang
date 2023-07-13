@@ -16,6 +16,7 @@ import Data.Map as Map
 import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
 import Effect.Class (class MonadEffect)
+import Language.Fixlat.Core.Grammar (Relation(..), RelationName)
 import Language.Fixlat.Core.Grammar as G
 import Language.Fixlat.Core.ModuleT (ModuleT)
 import Record as R
@@ -43,9 +44,9 @@ type GenerateEnv =
   }
 
 makeGenerateEnv :: _ -> GenerateEnv
-makeGenerateEnv {gas, rules, queue, comparePatch} =
+makeGenerateEnv {gas, rules, queue, relations, comparePatch} =
   { gas
-  , database: emptyDatabase
+  , database: emptyDatabase relations
   , rules
   , queue
   , comparePatch
@@ -77,7 +78,7 @@ decrementGasNonpositive = do
 --------------------------------------------------------------------------------
 
 -- | A Database stores all current rules, which includes 
-data Database = Database (List G.ConcreteProposition)
+newtype Database = Database (Map.Map RelationName G.ConcreteProposition)
 
 derive instance Generic Database _
 instance Show Database where show x = genericShow x
@@ -85,8 +86,26 @@ instance Show Database where show x = genericShow x
 instance Pretty Database where
   pretty (Database props) = bullets (Array.fromFoldable (pretty <$> props))
 
-emptyDatabase :: Database
-emptyDatabase = Database Nil
+emptyDatabase :: Map.Map G.RelationName G.Relation -> Database
+emptyDatabase rs = Database $ Map.fromFoldable $ (Map.toUnfoldable rs :: List _) <#> \(r /\ Relation lat) -> r /\ G.Proposition r (botTerm lat)
+
+botTerm :: G.LatticeType -> G.ConcreteTerm
+botTerm lattice = case lattice of
+  G.BoolLatticeType -> G.falseTerm
+  G.NatLatticeType -> G.zeroTerm
+  G.StringLatticeType -> G.epsilonTerm
+  G.OpLatticeType lat -> topTerm lat
+  G.PowerLatticeType dat -> G.nullTerm dat
+  G.TupleLatticeType _ lat1 lat2 -> G.ConstructorTerm G.TupleConstructor [botTerm lat1, botTerm lat2] lattice
+
+topTerm :: G.LatticeType -> G.ConcreteTerm
+topTerm lattice = case lattice of
+  G.BoolLatticeType -> G.trueTerm
+  G.NatLatticeType -> G.infinityTerm
+  G.StringLatticeType -> G.zetaTerm
+  G.OpLatticeType lat -> botTerm lat
+  G.PowerLatticeType dat -> G.domainTerm dat
+  G.TupleLatticeType _ lat1 lat2 -> G.ConstructorTerm G.TupleConstructor [topTerm lat1, topTerm lat2] lattice
 
 --------------------------------------------------------------------------------
 -- Queue
