@@ -9,6 +9,7 @@ import Prelude
 import Control.Assert (assert, assertI)
 import Control.Assert.Assertions (equal)
 import Control.Bug (bug)
+import Control.Debug (debugA)
 import Control.Monad.Except (ExceptT)
 import Control.Monad.Reader (ReaderT, asks)
 import Control.Monad.State (StateT, gets)
@@ -108,8 +109,8 @@ subsumesConcreteTerm'
   pure $ b1 <= b2
 
 subsumesConcreteTerm'
-  (G.ConstructorTerm G.TupleConstructor [a1, b1] (G.TupleLatticeType G.LexicographicTupleOrdering  aLat  bLat))
-  (G.ConstructorTerm G.TupleConstructor [a2, b2] (G.TupleLatticeType G.LexicographicTupleOrdering _aLat _bLat)) =
+  (G.ConstructorTerm G.TupleConstructor [a1, b1] (G.TupleLatticeType G.LexicographicTupleOrdering  _aLat  _bLat))
+  (G.ConstructorTerm G.TupleConstructor [a2, b2] (G.TupleLatticeType G.LexicographicTupleOrdering __aLat __bLat)) =
   a1 `subsumes` a2 >>= if _
     then a2 `subsumes` a1 >>= if _
       -- a1 == a2, so need to check b1 vs b2
@@ -120,20 +121,30 @@ subsumesConcreteTerm'
     else pure false
 
 subsumesConcreteTerm'
-  (G.ConstructorTerm G.TupleConstructor [a1, b1] (G.TupleLatticeType G.ParallelTupleOrdering  aLat  bLat))
-  (G.ConstructorTerm G.TupleConstructor [a2, b2] (G.TupleLatticeType G.ParallelTupleOrdering _aLat _bLat)) = do
+  (G.ConstructorTerm G.TupleConstructor [a1, b1] (G.TupleLatticeType G.ParallelTupleOrdering  _aLat  _bLat))
+  (G.ConstructorTerm G.TupleConstructor [a2, b2] (G.TupleLatticeType G.ParallelTupleOrdering __aLat __bLat)) = do
   c1 <- a1 `subsumes` a2
   c2 <- b1 `subsumes` b2
   pure (c1 && c2)
 
--- In the power set lattice, `xs` subsumes `ys` if every element of `xs`
--- is equal to some element in `ys`.
+-- In the power set lattice, `xs1` subsumes `xs2` if every element of `xs2`
+-- is equal to some element in `xs1`.
 subsumesConcreteTerm' 
   (G.ConstructorTerm G.SetConstructor xs1 (G.PowerLatticeType _))
   (G.ConstructorTerm G.SetConstructor xs2 (G.PowerLatticeType _)) = do
+  -- xs1' <- evaluate `traverse` xs1
+  -- xs2' <- evaluate `traverse` xs2
+  -- pure $ Array.all (\x2 -> Array.any (\x1 -> x1 == x2) xs1') xs2'
+
+  debugA $ "subsumption check: " <> pretty xs1 <> " ⊑ " <> pretty xs2
   xs1' <- evaluate `traverse` xs1
   xs2' <- evaluate `traverse` xs2
-  pure $ Array.all (\x1 -> Array.any (\x2 -> x1 == x2) xs2') xs1'
+  
+  result <- pure $ Array.all (\x2 -> Array.any (\x1 -> x1 == x2) xs1') xs2'
+
+  debugA $ "===> " <> show result
+
+  pure result
 
 subsumesConcreteTerm' (G.BoundTerm name _) term2 = do
   term1 <- (List.lookup name <$> asks _.sigma) >>= case _ of
@@ -150,6 +161,13 @@ instance Subsumable G.ConcreteTerm where
 
   -- TODO: first shallow evaluate, then use subsumesConcreteTerm'
   subsumes term1 term2 = do
+    -- term1' <- shallowEvaluate term1
+    -- term2' <- shallowEvaluate term2
+    -- subsumesConcreteTerm' term1' term2'
+
+    debugA $ "subsumes: " <> pretty term1 <> " <= " <> pretty term2
     term1' <- shallowEvaluate term1
     term2' <- shallowEvaluate term2
-    subsumesConcreteTerm' term1' term2'
+    result <- subsumesConcreteTerm' term1' term2'
+    debugA $ "===> " <> show result
+    pure result

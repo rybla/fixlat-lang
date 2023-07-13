@@ -1,10 +1,12 @@
 module Language.Fixlat.Core.Grammar where
 
 import Data.Either.Nested
+import Data.LatticeF
 import Data.Tuple.Nested
 import Data.Variant
 import Prelude
 import Prim hiding (Type)
+
 import Control.Assert (Assertion, assert, assertI)
 import Control.Assert.Assertions (equal, exactLength, just)
 import Control.Assert.Refined (class Refined)
@@ -14,7 +16,6 @@ import Data.Bifunctor (class Bifunctor, bimap, lmap, rmap)
 import Data.Either (Either(..))
 import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
-import Data.LatticeF
 import Data.List (List(..), (:))
 import Data.List as List
 import Data.Make (class Make)
@@ -29,7 +30,7 @@ import Data.String as String
 import Data.Traversable (maximum, traverse)
 import Hole (hole)
 import Prim as Prim
-import Text.Pretty (class Pretty, brackets, bullets, indent, lines, parens, pretty, ticks, (<+>))
+import Text.Pretty (class Pretty, braces, brackets, bullets, indent, lines, parens, pretty, ticks, (<+>))
 
 --------------------------------------------------------------------------------
 -- Module
@@ -103,7 +104,7 @@ instance Pretty DataType where
     SetDataType ty -> parens ("set " <> pretty ty)
     TupleDataType ty1 ty2 -> parens (pretty ty1 <> ", " <> pretty ty2)
 
--- | A LatticeType specifies a lattice ordering over a uniquely deTermined
+-- | A LatticeType specifies a lattice ordering over a uniquely determined
 -- | underlying DataType.
 data LatticeType
   = BoolLatticeType
@@ -171,14 +172,15 @@ instance Pretty (Term ty TermName) where
   pretty = case _ of
     ApplicationTerm fun tm _ -> pretty fun <> parens (pretty tm)
     ConstructorTerm prim [] _ -> pretty prim
-    ConstructorTerm prim tms _ -> case prim /\ tms of
+    term@(ConstructorTerm prim tms _) -> case prim /\ tms of
       TupleConstructor /\ [x, y] -> parens (pretty x <> ", " <> pretty y)
       BoolConstructor false /\ [] -> "false"
       BoolConstructor true /\ [] -> "true"
       IntConstructor x /\ [] -> show x
       StringConstructor s /\ [] -> show s
-      _ -> pretty prim <> parens (pretty tms)
-    QuantTerm x _ -> "?" <> pretty x
+      SetConstructor /\ xs -> braces (pretty xs)
+      _ -> bug $ "invalid ConstructorTerm: " <> show (lmap (const unit) term)
+    QuantTerm x _ -> pretty x
     BoundTerm x _ -> pretty x
 
 instance Pretty (Term ty Void) where pretty = pretty <<< toSymbolicTerm

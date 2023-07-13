@@ -1,8 +1,10 @@
 module Language.Fixlat.Core.Internal.Database where
 
+import Data.Tuple.Nested
 import Language.Fixlat.Core.Internal.Base
 import Prelude
 
+import Control.Debug (debugA)
 import Control.Debug as Debug
 import Control.Monad.Except (runExceptT)
 import Control.Monad.State (gets, modify_)
@@ -20,9 +22,10 @@ import Language.Fixlat.Core.Internal.Substitution (substitute)
 import Language.Fixlat.Core.Internal.Subsumption (subsumes)
 import Language.Fixlat.Core.Internal.Unification (unify)
 import Record as R
+import Text.Pretty (braces, pretty)
 import Type.Proxy (Proxy(..))
 import Utility (anyListM)
-import Utility (anyListM, (<$$>))
+import Utility (anyListM, (<$$>), (<##>))
 
 -- | Insert a proposition into the current database.
 insertProposition :: forall m. MonadEffect m => 
@@ -91,8 +94,11 @@ applyNormInstRuleToProposition (NormInstRule rule) prop = do
   unify rule.premise prop >>= case _ of
     Left err -> pure (Left err)
     Right sigma -> do
-      let NormInstRule rule' = substitute sigma (NormInstRule rule)
-      ApplyPatch <$$> normalize (make rule'.rule :: InstRule)
+      let rule' = substitute sigma $ normInstRuleConclusion (NormInstRule rule)
+      rule'_norm <- normalize rule'
+      pure $ rule'_norm <#> case _ of
+        Left rule'' -> ApplyPatch rule''
+        Right prop' -> ConclusionPatch prop'
 
 -- | Check if a rule can be applied to a proposition.
 canApplyNormInstRuleToProposition :: forall m. MonadEffect m =>

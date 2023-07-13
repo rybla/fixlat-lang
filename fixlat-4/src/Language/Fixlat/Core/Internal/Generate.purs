@@ -1,15 +1,12 @@
 module Language.Fixlat.Core.Internal.Generate (generate) where
 
-import Data.Tuple.Nested
+import Data.Tuple.Nested ((/\))
 import Language.Fixlat.Core.Internal.Base
 import Prelude
-
 import Control.Assert (assertI)
 import Control.Assert.Assertions (keyOfMap)
 import Control.Bug (bug)
 import Control.Debug as Debug
-import Control.Monad.Except (runExceptT)
-import Control.Monad.State (execStateT, modify, modify_)
 import Data.Array as Array
 import Data.Either (Either(..), either)
 import Data.List (List(..))
@@ -18,18 +15,15 @@ import Data.List.NonEmpty as NonEmptyList
 import Data.List.NonEmpty as NonemptyList
 import Data.Make (make)
 import Data.Map as Map
-import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
-import Data.Traversable (for, for_, traverse, traverse_)
+import Data.Traversable (traverse, traverse_)
 import Data.TraversableWithIndex (traverseWithIndex)
 import Effect.Class (class MonadEffect)
-import Hole (hole)
 import Language.Fixlat.Core.Grammar as G
 import Language.Fixlat.Core.Internal.Database as Database
 import Language.Fixlat.Core.Internal.Normalization (normalize)
 import Language.Fixlat.Core.Internal.Queue as Queue
 import Language.Fixlat.Core.ModuleT (ModuleT, getModuleCtx)
-import Record as R
 import Text.Pretty (pretty, ticks)
 
 --------------------------------------------------------------------------------
@@ -47,13 +41,7 @@ generate (Database initialProps) fixpointSpecName = do
   moduleCtx <- getModuleCtx
   let fixpointSpec = assertI keyOfMap $ fixpointSpecName /\ (unwrap moduleCtx.module_).fixpoints
 
-  rules <- (unwrap moduleCtx.module_).rules #
-    Map.filterWithKey (\ruleName _ -> ruleName `Array.elem` ((unwrap fixpointSpec).ruleNames)) >>>
-    map (make :: _ -> InstRule) >>>
-    traverseWithIndex (\ruleName rule -> normalize rule >>= case _ of
-      Left err -> bug $ "Failed to normalize module rule " <> ticks (pretty ruleName) <> ": " <> err
-      Right rule' -> pure rule') >>>
-    map Map.values
+  let comparePatch = const <<< const $ GT
 
   let queue = do
         let axioms = (unwrap moduleCtx.module_).axioms #
@@ -63,18 +51,39 @@ generate (Database initialProps) fixpointSpecName = do
         let props = initialProps <> List.fromFoldable (axioms <#> \(G.Axiom prop) -> prop)
         Queue (NonEmptyList.singleton <$> (ConclusionPatch <$> props))
 
-  let comparePatch = const <<< const $ GT
+  rules <- (unwrap moduleCtx.module_).rules #
+    Map.filterWithKey (\ruleName _ -> ruleName `Array.elem` ((unwrap fixpointSpec).ruleNames)) >>>
+    map (make :: _ -> InstRule) >>>
+    let
+      ctx :: GenerateCtx
+      ctx = makeGenerateCtx {}
 
-  let 
-    env :: GenerateEnv
-    env =
-        { gas: moduleCtx.initialGas 
-        , database: emptyDatabase
-        , rules
-        , queue 
-        , comparePatch }
+      env :: GenerateEnv
+      env = makeGenerateEnv
+          { gas: moduleCtx.initialGas 
+          , rules: mempty
+          , queue
+          , comparePatch }
+    in
+    traverseWithIndex (\ruleName rule -> runGenerateT ctx env (normalize rule) >>= case _ of
+      Left err /\ _ -> bug $ "Failed to normalize module rule " <> ticks (pretty ruleName) <> ": " <> err
+      Right (Left rule') /\ _ -> pure rule'
+      Right (Right prop') /\ _ -> bug $ "A user-defined rule should not normalize to a conclusion: " <> pretty prop') >>>
+    map Map.values
 
-  env' <- execStateT loop env
+  _ /\ env' <- do
+    let
+      ctx :: GenerateCtx
+      ctx = makeGenerateCtx {}
+
+      env :: GenerateEnv
+      env = makeGenerateEnv
+          { gas: moduleCtx.initialGas 
+          , rules
+          , queue
+          , comparePatch }
+
+    runGenerateT ctx env loop
 
   Debug.debugA $ "[generate] END"
   pure env'.database

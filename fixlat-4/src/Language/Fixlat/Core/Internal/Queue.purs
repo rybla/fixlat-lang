@@ -31,10 +31,10 @@ pop = do
       modify_ $ R.set _queue (Queue queue')
       patches # 
         ( --- ignore subsumed patches
-          NonemptyList.filterM isSubsumedPatch >=> 
+          NonemptyList.filterM ((pure <<< not) <=< isSubsumedPatch) >=> 
           NonEmptyList.fromList >>> case _ of
             Nothing -> do
-              Debug.debugA "[pop] ignoring subsumed patches"
+              Debug.debugA "[pop] all new patches are subsumed"
               pop
             Just patches' -> pure (Right patches')
         )

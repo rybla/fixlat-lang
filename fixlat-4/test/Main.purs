@@ -22,12 +22,6 @@ import Effect.Class.Console as Console
 -- main :: Effect Unit
 -- main = do
 --   Console.log "[Test.Main.main]"
---   Add.main
-
--- import Test.Dijkstra as Dijkstra
--- main :: Effect Unit
--- main = do
---   Console.log "[Test.Main.main]"
 --   Dijkstra.main
 
 -- import Test.Parsing as Parsing
@@ -36,8 +30,8 @@ import Effect.Class.Console as Console
 --   Console.log "[Test.Main.main]"
 --   Parsing.main
 
--- import Test.DfaMinimization as DfaMinimization
--- main :: Effect Unit
--- main = do
---   Console.log "[Test.Main.main]"
---   DfaMinimization.main
+import Test.DfaMinimization as DfaMinimization
+main :: Effect Unit
+main = do
+  Console.log "[Test.Main.main]"
+  DfaMinimization.main

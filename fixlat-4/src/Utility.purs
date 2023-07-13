@@ -16,10 +16,10 @@ map2 f a = map (map f) a
 infixr 1 map2 as <$$>
 
 anyListM :: forall m a. Monad m => (a -> m Boolean) -> List a -> m Boolean
-anyListM _ Nil = pure true
+anyListM _ Nil = pure false
 anyListM f (Cons x xs) = f x >>= case _ of
-  true -> anyListM f xs
-  false -> pure false
+  true -> pure true
+  false -> anyListM f xs
 
 allArrayM :: forall m a. Monad m => (a -> m Boolean) -> Array a -> m Boolean
 allArrayM f xs = case Array.uncons xs of

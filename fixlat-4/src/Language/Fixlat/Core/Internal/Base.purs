@@ -3,8 +3,8 @@ module Language.Fixlat.Core.Internal.Base where
 import Data.Tuple.Nested
 import Prelude
 
-import Control.Monad.Reader (ReaderT)
-import Control.Monad.State (StateT, modify)
+import Control.Monad.Reader (ReaderT, runReaderT)
+import Control.Monad.State (StateT, modify, runStateT)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as Array
 import Data.Generic.Rep (class Generic)
@@ -31,6 +31,9 @@ type GenerateT m = ReaderT GenerateCtx (StateT GenerateEnv (ModuleT m))
 liftGenerateT :: forall m a. MonadEffect m => ModuleT m a -> GenerateT m a
 liftGenerateT = lift <<< lift
 
+runGenerateT :: forall m a. MonadEffect m => GenerateCtx -> GenerateEnv -> GenerateT m a -> ModuleT m (a /\ GenerateEnv)
+runGenerateT ctx env = flip runReaderT ctx >>> flip runStateT env
+
 type GenerateEnv =
   { gas :: Int
   , database :: Database
@@ -39,9 +42,22 @@ type GenerateEnv =
   , comparePatch :: Patch -> Patch -> Ordering
   }
 
+makeGenerateEnv :: _ -> GenerateEnv
+makeGenerateEnv {gas, rules, queue, comparePatch} =
+  { gas
+  , database: emptyDatabase
+  , rules
+  , queue
+  , comparePatch
+  }
+
 type GenerateCtx =
   { sigma :: TermSub
   }
+
+makeGenerateCtx :: _ -> GenerateCtx
+makeGenerateCtx {} =
+  { sigma: mempty }
 
 _gas = Proxy :: Proxy "gas"
 _database = Proxy :: Proxy "database"
@@ -146,6 +162,13 @@ derive newtype instance Eq NormInstRule
 
 instance Pretty NormInstRule where
   pretty (NormInstRule rule) = pretty rule.rule
+
+normInstRuleConclusion :: NormInstRule -> InstRule
+normInstRuleConclusion (NormInstRule rule) = InstRule
+  { originalRule: rule.originalRule
+  , gamma: rule.gamma
+  , sigma: rule.sigma
+  , rule: rule.rule }
 
 type TermSub = List (G.TermName /\ G.ConcreteTerm)
 

@@ -29,7 +29,7 @@ instance (Pretty a, Pretty b) => Pretty (Tuple a b) where pretty (Tuple a b) = p
 instance (Pretty a, Pretty b) => Pretty (Either a b) where 
   pretty (Left a) = pretty a
   pretty (Right b) = pretty b
-instance (Pretty k, Pretty v) => Pretty (Map k v) where pretty m = bullets ((Map.toUnfoldable m :: Array _) <#> \(Tuple k v) -> pretty k <> " :=\n" <> indent (pretty v))
+instance (Pretty k, Pretty v) => Pretty (Map k v) where pretty m = bullets ((Map.toUnfoldable m :: Array _) <#> \(Tuple k v) -> pretty k <> " := " <> pretty v)
 instance Pretty a => Pretty (Set a) where pretty s = pretty (Set.toUnfoldable s :: Array _)
 
 surround pre post str = pre <> str <> post

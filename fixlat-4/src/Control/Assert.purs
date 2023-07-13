@@ -19,7 +19,7 @@ emptyAssertion msg = {label: "(empty) " <> msg, check: const (Left "empty")}
 
 assert :: forall a b c. Assertion a b -> a -> (Partial => b -> c) -> c
 assert ass a k = case ass.check a of
-  Left msg -> bug $ "Failed " <> ass.label <> ": " <> msg
+  Left msg -> bug $ "Failed assertion " <> ass.label <> ": " <> msg
   Right b -> unsafePartial (k b)
 
 assertI :: forall a b. Assertion a b -> a -> b
