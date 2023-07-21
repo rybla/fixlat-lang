@@ -13,10 +13,12 @@ import Data.List.NonEmpty as NonemptyList
 import Data.List.Types (NonEmptyList)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (over, under)
+import Data.Traversable (for, for_)
 import Effect.Class (class MonadEffect)
 import Hole (hole)
-import Language.Fixlat.Core.Internal.Subsumption (isSubsumedPatch)
+import Language.Fixlat.Core.Internal.Database (isSubsumedPatch)
 import Record as R
+import Text.Pretty (indent, indentN, pretty)
 import Type.Proxy (Proxy(..))
 
 pop :: forall m. MonadEffect m => 
@@ -29,8 +31,10 @@ pop = do
       pure $ Left Proxy
     Just {head: patches, tail: queue'} -> do
       modify_ $ R.set _queue (Queue queue')
+      Debug.debugA $ "[pop] patches:"
+      for_ patches \patch -> Debug.debugA (indentN 4 (pretty patch))
       patches # 
-        ( --- ignore subsumed patches
+        ( -- ignore subsumed patches
           NonemptyList.filterM ((pure <<< not) <=< isSubsumedPatch) >=> 
           NonEmptyList.fromList >>> case _ of
             Nothing -> do

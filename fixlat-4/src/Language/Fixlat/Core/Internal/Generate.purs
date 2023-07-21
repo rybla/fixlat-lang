@@ -1,8 +1,8 @@
 module Language.Fixlat.Core.Internal.Generate (generate) where
 
-import Data.Tuple.Nested ((/\))
 import Language.Fixlat.Core.Internal.Base
 import Prelude
+
 import Control.Assert (assertI)
 import Control.Assert.Assertions (keyOfMap)
 import Control.Bug (bug)
@@ -18,6 +18,8 @@ import Data.Map as Map
 import Data.Newtype (unwrap)
 import Data.Traversable (traverse, traverse_)
 import Data.TraversableWithIndex (traverseWithIndex)
+import Data.Tuple (snd)
+import Data.Tuple.Nested ((/\))
 import Effect.Class (class MonadEffect)
 import Language.Fixlat.Core.Grammar as G
 import Language.Fixlat.Core.Internal.Database as Database
@@ -48,8 +50,10 @@ generate (Database initialProps) fixpointSpecName = do
               Map.filterWithKey (\axiomName _ -> axiomName `Array.elem` ((unwrap fixpointSpec).axiomNames)) >>>
               Map.values >>>
               Array.fromFoldable
-        let props = initialProps <> List.fromFoldable (axioms <#> \(G.Axiom prop) -> prop)
+        let props = (snd <$> Map.toUnfoldable initialProps) <> List.fromFoldable (axioms <#> \(G.Axiom prop) -> prop)
         Queue (NonEmptyList.singleton <$> (ConclusionPatch <$> props))
+
+  relations <- getModuleCtx <#> _.module_ >>> unwrap >>> _.relations
 
   rules <- (unwrap moduleCtx.module_).rules #
     Map.filterWithKey (\ruleName _ -> ruleName `Array.elem` ((unwrap fixpointSpec).ruleNames)) >>>
@@ -60,7 +64,8 @@ generate (Database initialProps) fixpointSpecName = do
 
       env :: GenerateEnv
       env = makeGenerateEnv
-          { gas: moduleCtx.initialGas 
+          { gas: moduleCtx.initialGas
+          , relations
           , rules: mempty
           , queue
           , comparePatch }
@@ -79,6 +84,7 @@ generate (Database initialProps) fixpointSpecName = do
       env :: GenerateEnv
       env = makeGenerateEnv
           { gas: moduleCtx.initialGas 
+          , relations
           , rules
           , queue
           , comparePatch }

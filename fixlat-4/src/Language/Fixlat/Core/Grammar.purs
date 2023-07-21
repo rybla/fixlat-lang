@@ -1,10 +1,9 @@
 module Language.Fixlat.Core.Grammar where
 
 import Data.Either.Nested
-import Data.LatticeF
 import Data.Tuple.Nested
 import Data.Variant
-import Prelude
+import Prelude hiding (join)
 import Prim hiding (Type)
 
 import Control.Assert (Assertion, assert, assertI)
@@ -16,6 +15,8 @@ import Data.Bifunctor (class Bifunctor, bimap, lmap, rmap)
 import Data.Either (Either(..))
 import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
+import Data.Hashable (class Hashable)
+import Data.Lattice (class JoinSemilattice, class MeetSemilattice, class PartialOrd, comparePartial, join, meet)
 import Data.List (List(..), (:))
 import Data.List as List
 import Data.Make (class Make)
@@ -23,7 +24,6 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (class Newtype)
 import Data.Ord.Generic (genericCompare)
-import Data.Set (Set)
 import Data.Set as Set
 import Data.Show.Generic (genericShow)
 import Data.String as String
@@ -84,7 +84,6 @@ emptyModule = Module
 -- | ordering over them.
 data DataType
   = BoolDataType
-  | IntDataType
   | NatDataType
   | StringDataType
   | SetDataType DataType
@@ -98,7 +97,6 @@ derive instance Ord DataType
 instance Pretty DataType where
   pretty = case _ of
     BoolDataType -> "bool"
-    IntDataType -> "int"
     NatDataType -> "nat"
     StringDataType -> "string"
     SetDataType ty -> parens ("set " <> pretty ty)
@@ -163,82 +161,29 @@ data Term ty x
 derive instance Generic (Term ty x) _
 instance (Show x, Show ty) => Show (Term ty x) where show x = genericShow x
 derive instance (Eq x, Eq ty) => Eq (Term ty x)
+derive instance (Ord x, Ord ty) => Ord (Term ty x)
 derive instance Bifunctor Term
 
 instance Pretty (Term ty TermName) where
-  pretty = case _ of
-    ApplicationTerm fun tm _ -> pretty fun <> parens (pretty tm)
-    ConstructorTerm prim [] _ -> pretty prim
-    term@(ConstructorTerm prim tms _) -> case prim /\ tms of
-      TupleConstructor /\ [x, y] -> parens (pretty x <> ", " <> pretty y)
-      BoolConstructor false /\ [] -> "false"
-      BoolConstructor true /\ [] -> "true"
-      IntConstructor x /\ [] -> show x
-      StringConstructor s /\ [] -> show s
-      SetConstructor /\ xs -> braces (pretty xs)
-      _ -> bug $ "invalid ConstructorTerm: " <> show (lmap (const unit) term)
-    QuantTerm x _ -> pretty x
-    BoundTerm x _ -> pretty x
+  -- pretty = case _ of
+  --   ApplicationTerm fun tm _ -> pretty fun <> parens (pretty tm)
+  --   term@(ConstructorTerm prim args _) -> case prim /\ args of
+  --     BoolConstructor false /\ [] -> "false"
+  --     BoolConstructor true /\ [] -> "true"
+  --     ZeroConstructor /\ [] -> "z"
+  --     SucConstructor /\ [x'] -> "s" <> pretty x'
+  --     StringConstructor s /\ [] -> show s
+  --     TupleConstructor /\ [x, y] -> parens (pretty x <> ", " <> pretty y)
+  --     SetConstructor /\ xs -> braces (pretty xs)
+  --     InfinityConstructor /\ [] -> "infinity"
+  --     ZetaConstructor /\ [] -> "zeta"
+  --     DomainConstructor /\ [] -> "domain"
+  --     _ -> bug $ "invalid ConstructorTerm: " <> show (lmap (const unit) term)
+  --   QuantTerm x _ -> pretty x
+  --   BoundTerm x _ -> pretty x
+  pretty = hole "TODO"
 
 instance Pretty (Term ty Void) where pretty = pretty <<< toSymbolicTerm
-
-{-
--- TODO: should this also be over SymbolicTerm?
-instance PartialOrdF m ConcreteTerm where
-
-  comparePartial term@(ApplicationTerm _ _ _) _ = bug $ "In order to compare concrete terms, they must be fully simplified. However, you attempted to compare a neutral term " <> ticks (show term) <> "."
-  comparePartial _ term@(ApplicationTerm _ _ _) = bug $ "In order to compare concrete terms, they must be fully simplified. However, you attempted to compare a neutral term " <> ticks (show term) <> "."
-
-  comparePartial (QuantTerm x _) _ = absurd x
-  comparePartial _ (QuantTerm x _) = absurd x
-
-  comparePartial (ConstructorTerm p1 args1 _lty1) (ConstructorTerm p2 args2 _lty2) =
-    assert equal (_lty1 /\ _lty2) case _ of
-
-      OpLatticeType lty' -> comparePartial (ConstructorTerm p2 args2 lty') (ConstructorTerm p1 args1 lty')
-
-      DiscreteLatticeType _ -> if (p1 /\ args1) == (p2 /\ args2) then Just EQ else Nothing
-
-      TupleLatticeType LexicographicTupleOrdering _ _ 
-        | (TupleConstructor /\ [x1, y1]) /\ (TupleConstructor /\ [x2, y2]) <- (p1 /\ args1) /\ (p2 /\ args2) ->
-            case comparePartial x1 x2 of
-              Just EQ -> comparePartial y1 y2
-              mc -> mc
-
-      TupleLatticeType ParallelTupleOrdering _ _ 
-        | (TupleConstructor /\ [x1, y1]) /\ (TupleConstructor /\ [x2, y2]) <- (p1 /\ args1) /\ (p2 /\ args2) -> do
-            let 
-              c1 = comparePartial x1 x2
-              c2 = comparePartial y1 y2
-            if c1 == c2 then c1 else Nothing
-
-      TupleLatticeType DiscreteTupleOrdering _ _ 
-        | (TupleConstructor /\ [x1, y1]) /\ (TupleConstructor /\ [x2, y2]) <- (p1 /\ args1) /\ (p2 /\ args2) -> do
-            let 
-              c1 = comparePartial x1 x2
-              c2 = comparePartial y1 y2
-            if c1 == Just EQ && c2 == Just EQ then Just EQ else Nothing
-
-      BoolLatticeType | (BoolConstructor false /\ []) /\ (BoolConstructor false /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
-      BoolLatticeType | (BoolConstructor false /\ []) /\ (BoolConstructor true /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just LT
-      BoolLatticeType | (BoolConstructor true /\ []) /\ (BoolConstructor false /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just GT
-      BoolLatticeType | (BoolConstructor true /\ []) /\ (BoolConstructor true /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
-      
-      IntLatticeType | (IntConstructor x1 /\ []) /\ (IntConstructor x2 /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just (x1 `compare` x2)
-      
-      NatLatticeType | (ZeroConstructor /\ []) /\ (ZeroConstructor /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just EQ
-      NatLatticeType | (ZeroConstructor /\ []) /\ (SucConstructor /\ [_]) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just LT
-      NatLatticeType | (SucConstructor /\ [_]) /\ (ZeroConstructor /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just GT
-      NatLatticeType | (SucConstructor /\ [x1]) /\ (SucConstructor /\ [x2]) <- (p1 /\ args1) /\ (p2 /\ args2) -> comparePartial x1 x2
-
-      StringLatticeType | (StringConstructor s1 /\ []) /\ (StringConstructor s2 /\ []) <- (p1 /\ args1) /\ (p2 /\ args2) -> Just (s1 `compare` s2)
-
-      lty -> bug $
-        "[comparePartial] Unexpected term form:\n" <> bullets
-          [ "lty = " <> ticks (show lty)
-          , "(p1 /\\ args2) = " <> ticks (pretty p1 <> parens (pretty args1))
-          , "(p2 /\\ args2) = " <> ticks (pretty p2 <> parens (pretty args2)) ]
--}
 
 typeOfTerm :: forall ty x. Term ty x -> ty
 typeOfTerm (ApplicationTerm _ _ ty) = ty
@@ -247,42 +192,56 @@ typeOfTerm (QuantTerm _ ty) = ty
 typeOfTerm (BoundTerm _ ty) = ty
 
 data Constructor 
-  = ZeroConstructor
-  | SucConstructor
-  | InfinityConstructor
-  | TupleConstructor
-  | IntConstructor Int
-  | StringConstructor String
-  | ZetaConstructor
+  = NatConstructor NatConstructor
+  | StringConstructor StringConstructor
   | BoolConstructor Boolean
-  | SetConstructor
-  | DomainConstructor -- set that contains everything
+  | TupleConstructor
+  | SetConstructor SetConstructor
 
 derive instance Generic Constructor _
 instance Show Constructor where show x = genericShow x
 derive instance Eq Constructor
 derive instance Ord Constructor
 
+data NatConstructor
+  = Zero
+  | Suc
+  | Infinity -- top nat
+
+derive instance Generic NatConstructor _
+instance Show NatConstructor where show x = genericShow x
+derive instance Eq NatConstructor
+derive instance Ord NatConstructor
+
+data SetConstructor
+  = LiteralSet
+  | Domain -- top set
+
+derive instance Generic SetConstructor _
+instance Show SetConstructor where show x = genericShow x
+derive instance Eq SetConstructor
+derive instance Ord SetConstructor
+
+data StringConstructor 
+  = LiteralString String 
+  | Zeta -- top string
+
+derive instance Generic StringConstructor _
+instance Show StringConstructor where show x = genericShow x
+derive instance Eq StringConstructor
+derive instance Ord StringConstructor
+
 instance Pretty Constructor where 
   pretty = case _ of
-    ZeroConstructor -> "zero"
-    SucConstructor -> "suc"
-    InfinityConstructor -> "infinity"
+    NatConstructor Zero -> "zero"
+    NatConstructor Suc -> "suc"
+    NatConstructor Infinity -> "∞"
+    StringConstructor (LiteralString s) -> show s
+    StringConstructor Zeta -> show "ζ"
+    BoolConstructor b -> show b
     TupleConstructor -> "tuple"
-    IntConstructor x -> show x
-    BoolConstructor x -> show x
-    StringConstructor x -> show x
-    ZetaConstructor -> "zeta"
-    SetConstructor -> "set"
-    DomainConstructor -> "domain"
-
--- substituteTerm :: TermSub -> SymbolicTerm -> SymbolicTerm
--- substituteTerm sigma (ApplicationTerm fun tms ty) = ApplicationTerm fun (substituteTerm sigma <$> tms) ty
--- substituteTerm sigma (ConstructorTerm prim tms ty) = ConstructorTerm prim (substituteTerm sigma <$> tms) ty
--- substituteTerm sigma (QuantTerm x ty) = case Map.lookup x sigma of
---   Just tm -> toSymbolicTerm tm
---   Nothing -> QuantTerm x ty
--- substituteTerm _sigma (BoundTerm x ty) = BoundTerm x ty
+    SetConstructor LiteralSet -> "set"
+    SetConstructor Domain -> "domain"
 
 concreteTerm :: Assertion SymbolicTerm ConcreteTerm
 concreteTerm = 
@@ -310,27 +269,45 @@ falseTerm = ConstructorTerm (BoolConstructor false) [] BoolLatticeType
 
 -- the bot nat
 zeroTerm :: forall x. Term LatticeType x
-zeroTerm = ConstructorTerm ZeroConstructor [] NatLatticeType
+zeroTerm = ConstructorTerm (NatConstructor Zero) [] NatLatticeType
 
 -- the top nat
 infinityTerm :: forall x. Term LatticeType x
-infinityTerm = ConstructorTerm InfinityConstructor [] NatLatticeType
+infinityTerm = ConstructorTerm (NatConstructor Infinity) [] NatLatticeType
 
 -- the bot string
 epsilonTerm :: forall x. Term LatticeType x
-epsilonTerm = ConstructorTerm (StringConstructor "") [] StringLatticeType
+epsilonTerm = ConstructorTerm (StringConstructor (LiteralString "")) [] StringLatticeType
 
 -- the top string
 zetaTerm :: forall x. Term LatticeType x
-zetaTerm = ConstructorTerm ZetaConstructor [] StringLatticeType
+zetaTerm = ConstructorTerm (StringConstructor Zeta) [] StringLatticeType
 
 -- the bot set
 nullTerm :: forall x. DataType -> Term LatticeType x
-nullTerm dat = ConstructorTerm SetConstructor [] (PowerLatticeType dat)
+nullTerm dat = ConstructorTerm (SetConstructor LiteralSet) [] (PowerLatticeType dat)
 
 -- the top set
 domainTerm :: forall x. DataType -> Term LatticeType x
-domainTerm dat = ConstructorTerm DomainConstructor [] (PowerLatticeType dat)
+domainTerm dat = ConstructorTerm (SetConstructor Domain) [] (PowerLatticeType dat)
+
+botTerm :: LatticeType -> ConcreteTerm
+botTerm lattice = case lattice of
+  BoolLatticeType -> falseTerm
+  NatLatticeType -> zeroTerm
+  StringLatticeType -> epsilonTerm
+  OpLatticeType lat -> topTerm lat
+  PowerLatticeType dat -> nullTerm dat
+  TupleLatticeType _ lat1 lat2 -> ConstructorTerm TupleConstructor [botTerm lat1, botTerm lat2] lattice
+
+topTerm :: LatticeType -> ConcreteTerm
+topTerm lattice = case lattice of
+  BoolLatticeType -> trueTerm
+  NatLatticeType -> infinityTerm
+  StringLatticeType -> zetaTerm
+  OpLatticeType lat -> botTerm lat
+  PowerLatticeType dat -> domainTerm dat
+  TupleLatticeType _ lat1 lat2 -> ConstructorTerm TupleConstructor [topTerm lat1, topTerm lat2] lattice
 
 --------------------------------------------------------------------------------
 -- Function
@@ -387,6 +364,9 @@ derive instance Bifunctor Proposition
 
 instance Pretty (Proposition ty TermName) where pretty (Proposition rel tm) = pretty rel <> brackets (pretty tm)
 instance Pretty (Proposition ty Void) where pretty = pretty <<< toSymbolicProposition
+
+propositionRelationName :: forall ty x. Proposition ty x -> RelationName
+propositionRelationName (Proposition rel _) = rel
 
 -- substituteProposition :: TermSub -> SymbolicProposition -> SymbolicProposition
 -- substituteProposition sigma (Proposition rel arg) = Proposition rel (substituteTerm sigma arg)
@@ -451,7 +431,7 @@ instance Show Rule where show x = genericShow x
 instance Eq Rule where eq x y = genericEq x y
 
 instance Pretty Rule where
-  pretty _rule = "╭\n" <> lines [lines strs1, hline, lines strs2] <> "\n╰ "
+  pretty _rule = "╭\n" <> lines (strs1 <> [hline] <> strs2) <> "\n╰ "
     where
     go :: Array String -> Rule -> Array String /\ Array String
     go strs (FilterRule term rule) = go (Array.snoc strs $ "│ if " <> pretty term) rule
@@ -549,3 +529,113 @@ type InsertionSpecName = Name "Insertion"
 
 instance Pretty (Name label) where
   pretty (Name str) = str
+
+--------------------------------------------------------------------------------
+-- PartialOrd instances
+--------------------------------------------------------------------------------
+
+-- instance PartialOrd ConcreteProposition where
+--   comparePartial (Proposition rel1 arg1) (Proposition rel2 arg2) 
+--     | otherwise = Nothing
+--     | rel1 == rel2 = comparePartial arg1 arg2
+
+-- instance MeetSemilattice ConcreteProposition where
+--   meet (Proposition rel1 arg1) (Proposition rel2 arg2) 
+--     | rel1 == rel2 = Proposition rel1 (join arg1 arg2)
+--     | otherwise = bug $ "meet @ConcreteProposition: Should not take the meet of propositions of different relations."
+
+-- instance JoinSemilattice ConcreteProposition where
+--   join (Proposition rel1 arg1) (Proposition rel2 arg2) 
+--     | rel1 == rel2 = Proposition rel1 (meet arg1 arg2)
+--     | otherwise = bug $ "join @ConcreteProposition: Should not take the join of propositions of different relations."
+
+-- instance PartialOrd ConcreteTerm where
+--   comparePartial x y = do
+--     let lat1 = typeOfTerm x
+--     let lat2 = typeOfTerm y
+--     let lat = assertI equal (lat1 /\ lat2)
+--     case lat /\ x /\ y of
+--       OpLatticeType _ /\ _ /\ _ -> comparePartial y x
+--       TupleLatticeType LexicographicTupleOrdering _ _ /\ ConstructorTerm TupleConstructor [x1, x2] _ /\ ConstructorTerm TupleConstructor [y1, y2] _ -> 
+--         case comparePartial x1 y1 of
+--           Just EQ -> comparePartial x2 y2
+--           mo -> mo
+--       TupleLatticeType ParallelTupleOrdering _ _ /\ ConstructorTerm TupleConstructor [x1, x2] _ /\ ConstructorTerm TupleConstructor [y1, y2] _ -> do
+--         let mo1 = comparePartial x1 y1
+--         let mo2 = comparePartial x2 y2
+--         if mo1 == mo2 then mo1 else Nothing
+--       PowerLatticeType _ /\ ConstructorTerm SetConstructor xs _ /\ ConstructorTerm SetConstructor ys _ ->
+--         if flip Array.all ys \y -> flip Array.any xs \x -> x == y
+--         then if Array.length ys == Array.length xs 
+--           then Just EQ
+--           else Just GT
+--         else Nothing
+--       BoolLatticeType /\ ConstructorTerm (BoolConstructor a) [] BoolLatticeType /\ ConstructorTerm (BoolConstructor b) [] BoolLatticeType -> Just (a `compare` b)
+      
+--       NatLatticeType /\ ConstructorTerm ZeroConstructor [] NatLatticeType /\ ConstructorTerm ZeroConstructor [] NatLatticeType -> Just EQ
+--       NatLatticeType /\ ConstructorTerm ZeroConstructor [] NatLatticeType /\ ConstructorTerm SucConstructor [y'] NatLatticeType -> Just LT
+--       NatLatticeType /\ ConstructorTerm SucConstructor [x'] NatLatticeType /\ ConstructorTerm ZeroConstructor [] NatLatticeType -> Just GT
+--       NatLatticeType /\ ConstructorTerm SucConstructor [x'] NatLatticeType /\ ConstructorTerm SucConstructor [y'] NatLatticeType -> x' `comparePartial` y'
+      
+--       StringLatticeType /\ ConstructorTerm (StringConstructor x) [] StringLatticeType /\ ConstructorTerm (StringConstructor y) [] StringLatticeType ->  Just (x `compare` y)
+--       _ -> bug $ "comparePartial @ConcreteTerm: invalid case: " <> ticks (show x) <> ", " <> ticks (show y)
+
+-- instance MeetSemilattice ConcreteTerm where
+--   meet x y = do
+--     let lat1 = typeOfTerm x
+--     let lat2 = typeOfTerm y
+--     let lat = assertI equal (lat1 /\ lat2)
+--     case lat /\ x /\ y of
+--       OpLatticeType _ /\ _ /\ _ -> join x y
+--       TupleLatticeType LexicographicTupleOrdering _ _ /\ ConstructorTerm TupleConstructor [x1, x2] _ /\ ConstructorTerm TupleConstructor [y1, y2] _ -> ConstructorTerm TupleConstructor [meet x1 y1, meet x2 y2] lat
+--       TupleLatticeType ParallelTupleOrdering _ _ /\ ConstructorTerm TupleConstructor [x1, x2] _ /\ ConstructorTerm TupleConstructor [y1, y2] _ -> ConstructorTerm TupleConstructor [meet x1 y1, meet x2 y2] lat
+--       PowerLatticeType _ /\ ConstructorTerm SetConstructor xs _ /\ ConstructorTerm SetConstructor ys _ -> ConstructorTerm SetConstructor (union xs ys) lat
+--       BoolLatticeType /\ ConstructorTerm (BoolConstructor a) [] BoolLatticeType /\ ConstructorTerm (BoolConstructor b) [] BoolLatticeType -> ConstructorTerm (BoolConstructor (a && b)) [] BoolLatticeType
+
+--       NatLatticeType /\ ConstructorTerm ZeroConstructor []   _ /\ ConstructorTerm ZeroConstructor []   _ -> ConstructorTerm ZeroConstructor [] lat
+--       NatLatticeType /\ ConstructorTerm ZeroConstructor []   _ /\ ConstructorTerm SucConstructor  [y'] _ -> ConstructorTerm SucConstructor  [y'] lat
+--       NatLatticeType /\ ConstructorTerm SucConstructor  [x'] _ /\ ConstructorTerm ZeroConstructor []   _ -> ConstructorTerm SucConstructor  [x'] lat
+--       NatLatticeType /\ ConstructorTerm SucConstructor  [x'] _ /\ ConstructorTerm SucConstructor  [y'] _ -> ConstructorTerm SucConstructor [meet x' y'] lat
+
+--       StringLatticeType /\ _ /\ _ | ConstructorTerm (StringConstructor "") [] StringLatticeType `Array.elem` [x, y] -> ConstructorTerm (StringConstructor "") [] StringLatticeType
+
+--       StringLatticeType /\ ConstructorTerm (StringConstructor s) [] _ /\ ConstructorTerm (StringConstructor t) [] _ ->
+--         case String.stripPrefix (String.Pattern s) t of
+--           Nothing -> case String.stripPrefix (String.Pattern t) s of
+--             Nothing -> ConstructorTerm ZetaConstructor [] lat -- s nor t is a is a prefix of the other, so go to top
+--             Just t' -> ConstructorTerm (StringConstructor s) [] lat -- t is a prefix of s, so t <= s
+--           Just s' -> ConstructorTerm (StringConstructor t) [] lat -- s is a prefix of t, so s <= t
+      
+--       StringLatticeType /\ _ /\ _ | Just i <- ConstructorTerm ZetaConstructor [] StringLatticeType `Array.elemIndex` [x, y] -> if i == 1 then x else y
+
+--       _ -> bug $ "meet @ConcreteTerm: invalid case: " <> ticks (show x) <> ", " <> ticks (show y)
+--     where
+--     union xy ys = Set.toUnfoldable (Set.union (Set.fromFoldable xy) (Set.fromFoldable ys))
+
+-- instance JoinSemilattice ConcreteTerm where 
+--   join x y = do
+--     let lat1 = typeOfTerm x
+--     let lat2 = typeOfTerm y
+--     let lat = assertI equal (lat1 /\ lat2)
+--     case lat /\ x /\ y of
+--       OpLatticeType _ /\ _ /\ _ -> meet x y
+--       TupleLatticeType LexicographicTupleOrdering _ _ /\ ConstructorTerm TupleConstructor [x1, x2] _ /\ ConstructorTerm TupleConstructor [y1, y2] _ -> ConstructorTerm TupleConstructor [join x1 y1, join x2 y2] lat
+--       TupleLatticeType ParallelTupleOrdering _ _ /\ ConstructorTerm TupleConstructor [x1, x2] _ /\ ConstructorTerm TupleConstructor [y1, y2] _ -> ConstructorTerm TupleConstructor [join x1 y1, join x2 y2] lat
+--       PowerLatticeType _ /\ ConstructorTerm SetConstructor xs _ /\ ConstructorTerm SetConstructor ys _ -> ConstructorTerm SetConstructor (intersection xs ys) lat
+--       BoolLatticeType /\ ConstructorTerm (BoolConstructor a) [] BoolLatticeType /\ ConstructorTerm (BoolConstructor b) [] BoolLatticeType -> ConstructorTerm (BoolConstructor (a && b)) [] BoolLatticeType
+
+--       NatLatticeType /\ ConstructorTerm ZeroConstructor []   _ /\ ConstructorTerm ZeroConstructor []   _ -> ConstructorTerm ZeroConstructor [] lat
+--       NatLatticeType /\ ConstructorTerm ZeroConstructor []   _ /\ ConstructorTerm SucConstructor  [y'] _ -> ConstructorTerm SucConstructor  [y'] lat
+--       NatLatticeType /\ ConstructorTerm SucConstructor  [x'] _ /\ ConstructorTerm ZeroConstructor []   _ -> ConstructorTerm SucConstructor  [x'] lat
+--       NatLatticeType /\ ConstructorTerm SucConstructor  [x'] _ /\ ConstructorTerm SucConstructor  [y'] _ -> ConstructorTerm SucConstructor [join x' y'] lat
+
+--       StringLatticeType /\ ConstructorTerm (StringConstructor s) [] _ /\ ConstructorTerm (StringConstructor t) [] _ ->
+--         case String.stripPrefix (String.Pattern s) t of
+--           Nothing -> case String.stripPrefix (String.Pattern t) s of
+--             Nothing -> ConstructorTerm (StringConstructor "") [] lat -- s nor t is a is a prefix of the other, so go to bot
+--             Just t' -> ConstructorTerm (StringConstructor t) [] lat -- t is a prefix of s, so t <= s
+--           Just s' -> ConstructorTerm (StringConstructor s) [] lat -- s is a prefix of t, so s <= t
+--       _ -> bug "join @ConcreteTerm: invalid case"
+--     where
+--     intersection xs ys = Set.toUnfoldable (Set.intersection (Set.fromFoldable xs) (Set.fromFoldable ys))
+

@@ -3,8 +3,9 @@ module Language.Fixlat.Core.Internal.Base where
 import Data.Tuple.Nested
 import Prelude
 
+import Control.Bug (bug)
 import Control.Monad.Reader (ReaderT, runReaderT)
-import Control.Monad.State (StateT, modify, runStateT)
+import Control.Monad.State (StateT, gets, modify, runStateT)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as Array
 import Data.Generic.Rep (class Generic)
@@ -13,14 +14,14 @@ import Data.List.Types (NonEmptyList)
 import Data.List.Types as NonEmptyList
 import Data.Make (class Make)
 import Data.Map as Map
+import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
 import Effect.Class (class MonadEffect)
-import Language.Fixlat.Core.Grammar (Relation(..), RelationName)
 import Language.Fixlat.Core.Grammar as G
 import Language.Fixlat.Core.ModuleT (ModuleT)
 import Record as R
-import Text.Pretty (class Pretty, bullets, indent, pretty, (<\>))
+import Text.Pretty (class Pretty, bullets, indent, pretty, ticks, (<\>))
 import Type.Proxy (Proxy(..))
 
 --------------------------------------------------------------------------------
@@ -78,8 +79,9 @@ decrementGasNonpositive = do
 --------------------------------------------------------------------------------
 
 -- | A Database stores all current rules, which includes 
-newtype Database = Database (Map.Map RelationName G.ConcreteProposition)
+newtype Database = Database (Map.Map G.RelationName G.ConcreteProposition)
 
+derive instance Newtype Database _
 derive instance Generic Database _
 instance Show Database where show x = genericShow x
 
@@ -87,25 +89,7 @@ instance Pretty Database where
   pretty (Database props) = bullets (Array.fromFoldable (pretty <$> props))
 
 emptyDatabase :: Map.Map G.RelationName G.Relation -> Database
-emptyDatabase rs = Database $ Map.fromFoldable $ (Map.toUnfoldable rs :: List _) <#> \(r /\ Relation lat) -> r /\ G.Proposition r (botTerm lat)
-
-botTerm :: G.LatticeType -> G.ConcreteTerm
-botTerm lattice = case lattice of
-  G.BoolLatticeType -> G.falseTerm
-  G.NatLatticeType -> G.zeroTerm
-  G.StringLatticeType -> G.epsilonTerm
-  G.OpLatticeType lat -> topTerm lat
-  G.PowerLatticeType dat -> G.nullTerm dat
-  G.TupleLatticeType _ lat1 lat2 -> G.ConstructorTerm G.TupleConstructor [botTerm lat1, botTerm lat2] lattice
-
-topTerm :: G.LatticeType -> G.ConcreteTerm
-topTerm lattice = case lattice of
-  G.BoolLatticeType -> G.trueTerm
-  G.NatLatticeType -> G.infinityTerm
-  G.StringLatticeType -> G.zetaTerm
-  G.OpLatticeType lat -> botTerm lat
-  G.PowerLatticeType dat -> G.domainTerm dat
-  G.TupleLatticeType _ lat1 lat2 -> G.ConstructorTerm G.TupleConstructor [topTerm lat1, topTerm lat2] lattice
+emptyDatabase rs = Database $ Map.fromFoldable $ (Map.toUnfoldable rs :: List _) <#> \(r /\ G.Relation lat) -> r /\ G.Proposition r (G.botTerm lat)
 
 --------------------------------------------------------------------------------
 -- Queue
@@ -164,6 +148,9 @@ derive instance Newtype InstRule _
 derive newtype instance Show InstRule
 derive newtype instance Eq InstRule
 
+instance Pretty InstRule where
+  pretty (InstRule rule) = pretty rule.rule
+
 -- | A normalized instantiated rule has a premise at its head.
 -- |
 -- | Note that `gamma` and `sigma` are stored in reverse order of introductions,
@@ -180,7 +167,10 @@ derive newtype instance Show NormInstRule
 derive newtype instance Eq NormInstRule
 
 instance Pretty NormInstRule where
-  pretty (NormInstRule rule) = pretty rule.rule
+  pretty rule = pretty (fromNormInstRuleToRule rule)
+
+fromNormInstRuleToRule :: NormInstRule -> G.Rule
+fromNormInstRuleToRule (NormInstRule rule) = G.PremiseRule rule.premise rule.rule
 
 normInstRuleConclusion :: NormInstRule -> InstRule
 normInstRuleConclusion (NormInstRule rule) = InstRule

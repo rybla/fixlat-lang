@@ -10,6 +10,7 @@ import Data.Array as Array
 import Data.Either (Either(..))
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
+import Data.Newtype (unwrap)
 import Data.Newtype as Newtype
 import Data.Set as Set
 import Data.String.CodeUnits as CodeUnits
@@ -40,22 +41,19 @@ type Transition = {start :: State, end :: State, label :: Char}
 
 state :: _
 state = do
-  let lattice = PowerLatticeType IntDataType
+  let lattice = StringLatticeType
   { lattice
   , data: toDataType lattice
-  , lit: \i -> ConstructorTerm SetConstructor [ConstructorTerm (IntConstructor i) [] IntLatticeType] lattice
+  , lit: \i -> ConstructorTerm (StringConstructor (show (i :: Int))) [] lattice
   , var: \x -> QuantTerm x lattice
   }
 
 label :: _
 label = do
-  let lattice = PowerLatticeType StringDataType
+  let lattice = StringLatticeType
   { lattice
   , data: toDataType lattice
-  , lit: \c -> 
-      ConstructorTerm SetConstructor
-        [ ConstructorTerm (StringConstructor (CodeUnits.fromCharArray [c])) [] StringLatticeType ]
-        lattice
+  , lit: \c -> ConstructorTerm (StringConstructor (CodeUnits.fromCharArray [c])) [] lattice
   , var: \x -> QuantTerm x lattice
   }
 
@@ -148,7 +146,7 @@ makeModule (Dfa dfa) =
   emptyModule # Newtype.over Module _
     { 
       relations = Map.fromFoldable
-        [ 
+        [
           transition.name /\ Relation transition.lattice
         ,
           accepting.name /\ Relation accepting.lattice
@@ -159,7 +157,7 @@ makeModule (Dfa dfa) =
         ,
           live.name /\ Relation live.lattice
         ]
-    , 
+    ,
       axioms = Map.unions
         [
           -- starting state
@@ -276,9 +274,9 @@ main = do
       { startState: 0
       , acceptingStates: Set.singleton 4
       , transitions: 
-          [ {start: 0, end: 1, label: 'a'} 
-          , {start: 1, end: 2, label: 'a'} 
-          , {start: 2, end: 3, label: 'a'} 
+          [ {start: 0, end: 1, label: 'a'}
+          , {start: 1, end: 2, label: 'a'}
+          , {start: 2, end: 3, label: 'a'}
           , {start: 3, end: 4, label: 'a'}
 
           , {start: 10, end: 11, label: 'a'}
@@ -295,14 +293,14 @@ main = do
 
   -- reachability
   do
-    let db_reachability = emptyDatabase
+    let db_reachability = emptyDatabase (ctx # _.module_ >>> unwrap >>> _.relations)
     Console.log $ "[DfaMinimization.main] Input database:" <> pretty db_reachability <> "\n"
     db_reachability' <- runReaderT (runModuleT (generate db_reachability _fix_reachability)) ctx
     Console.log $ "[DfaMinimization.main] Output database:" <> pretty db_reachability' <> "\n"
 
   -- -- live
   -- do
-  --   let db_live = emptyDatabase
+  --   let db_live = emptyDatabase (ctx # _.module_ >>> unwrap >>> _.relations)
   --   Console.log $ "[DfaMinimization.main] Input database:" <> pretty db_live <> "\n"
   --   db_live' <- runReaderT (runModuleT (generate db_live _fix_live)) ctx
   --   Console.log $ "[DfaMinimization.main] Output database:" <> pretty db_live' <> "\n"

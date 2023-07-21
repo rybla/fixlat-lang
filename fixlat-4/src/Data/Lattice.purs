@@ -4,6 +4,7 @@ import Data.Maybe
 import Data.Newtype
 import Prelude hiding (join)
 
+import Data.String as String
 import Utility (churchIf)
 
 -- | A partial ordering satisfies the following properties:
@@ -18,6 +19,8 @@ import Utility (churchIf)
 -- |   a <= b  &&  b <= c  ==>  a <= c
 -- | ```
 class PartialOrd a where comparePartial :: a -> a -> Maybe Ordering
+
+-- instance Ord a => PartialOrd a where comparePartial x y = Just (compare x y)
 
 -- | Test whether one value is _strictly less than_ another.
 lessThanPartial :: forall a. PartialOrd a => a -> a -> Maybe Boolean
@@ -71,6 +74,18 @@ maxPartial a1 a2 = churchIf a1 a2 <$> (a1 >? a2)
 -- | ```
 class PartialOrd a <= JoinSemilattice a where join :: a -> a -> a
 infixr 3 join as ∧
+
+-- instance JoinSemilattice Boolean where join x y = x || y
+-- instance JoinSemilattice String where
+--   join x y = 
+--     case String.stripPrefix (String.Pattern x) y of
+--       Nothing -> case String.stripPrefix (String.Pattern y) x of
+--         -- neither x nor y is a substring of the other
+--         Nothing -> sigma
+--         -- y is a substring of x
+--         Just y' -> ?a
+--       -- x is a substring of y
+--       Just x' -> ?a
 
 -- | Bounded join semilattice properties:
 -- | ```

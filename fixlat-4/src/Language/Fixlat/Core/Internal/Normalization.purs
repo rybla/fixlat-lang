@@ -30,7 +30,7 @@ class Normalize (a :: Type) (b :: Type) | a -> b where
 instance Normalize InstRule (String \/ (NormInstRule \/ ConcreteProposition)) where
   normalize :: forall m. MonadEffect m => InstRule -> (GenerateT m) (String \/ (NormInstRule \/ ConcreteProposition))
   normalize (InstRule _rule) = do
-    debugA $ "normalize\n" <> pretty _rule.rule
+    debugA $ "normalize\n" <> pretty (InstRule _rule)
     local (R.modify _sigma (_rule.sigma <> _)) do
       let ctx = {gamma: _rule.gamma}
       runExceptT (runStateT (go _rule.rule) ctx) >>= case _ of
