@@ -10,8 +10,8 @@ import Data.Either (Either(..))
 import Data.List as List
 import Data.Maybe (Maybe(..))
 import Language.Mfl.Core.ModuleT (ModuleT)
-import Language.Mfl.Generate.Internal.Base (NormRule(..), QuantCtx)
-import Language.Mfl.Generate.Internal.Evaluation (TermSub, concretizeProp, concretizeTerm, evaluateProp, evaluateTerm, runEvaluationT)
+import Language.Mfl.Generate.Internal.Base (NormRule(..), QuantCtx, TermSub)
+import Language.Mfl.Generate.Internal.Evaluation (concretizeProp, concretizeTerm, evaluateProp, evaluateTerm, runEvaluationT)
 import Record as R
 import Text.Pretty (pretty)
 import Type.Proxy (Proxy(..))

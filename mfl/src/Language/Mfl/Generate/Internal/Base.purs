@@ -2,14 +2,13 @@ module Language.Mfl.Generate.Internal.Base where
 
 import Language.Mfl.Core.Ast
 import Prelude
-
+import Data.Tuple.Nested
 import Control.Monad.Computation (ComputationT)
 import Data.Generic.Rep (class Generic)
 import Data.List (List)
 import Data.Map as Map
 import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
-import Language.Mfl.Generate.Internal.Evaluation (TermSub)
 
 --------------------------------------------------------------------------------
 -- GenerateT
@@ -27,6 +26,8 @@ type GenerateEnv =
   , database :: Database }
 
 type GenerateErr = String
+
+type TermSub = List (TermName /\ EvaluatedTerm)
 
 --------------------------------------------------------------------------------
 -- NormRule

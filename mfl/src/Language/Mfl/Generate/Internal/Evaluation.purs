@@ -7,6 +7,7 @@ import Prelude
 import Control.Monad.Computation
 import Data.Array as Array
 import Data.Bifunctor (rmap)
+import Language.Mfl.Generate.Internal.Base
 import Data.Bot (elimBot)
 import Data.Either (Either(..))
 import Data.Foldable as Foldable
@@ -38,10 +39,8 @@ runEvaluationT {sigma} = runComputationT
   {}
 
 --------------------------------------------------------------------------------
--- TermSub
+-- Concretize
 --------------------------------------------------------------------------------
-
-type TermSub = List (Tuple TermName EvaluatedTerm)
 
 concretizeProp :: forall m. Monad m => SymbolicProp -> EvaluationT m ConcreteProp
 concretizeProp (Prop rel arg) = Prop rel <$> concretizeTerm arg

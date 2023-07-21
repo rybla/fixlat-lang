@@ -5,8 +5,8 @@ import Data.Tuple.Nested
 import Prelude
 import Prim hiding (Type)
 
-import Data.Bifunctor (class Bifunctor)
-import Data.Bot (Bot)
+import Data.Bifunctor (class Bifunctor, bimap)
+import Data.Bot (Bot, elimBot)
 import Data.Either (Either(..))
 import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
@@ -133,6 +133,9 @@ instance (Ord f, Ord x, Ord sig) => Ord (Term sig x f) where compare x = generic
 
 derive instance Bifunctor (Term sig)
 
+fromEvaluatedTerm :: forall a b. EvaluatedTerm -> Term LatType a b
+fromEvaluatedTerm = bimap elimBot elimBot
+
 data PreTerm sig x f
   = NeuTerm f (Array (Term sig x f))
   | ConstrTerm (Constr (Term sig x f))
@@ -147,8 +150,8 @@ derive instance Bifunctor (PreTerm sig)
 
 data Constr term
   = NatConstr (NatConstr term)
-  | StringConstr StringConstr
   | BoolConstr BoolConstr
+  | StringConstr StringConstr
   | SetConstr (SetConstr term)
   | TupleConstr (TupleConstr term)
 
@@ -222,6 +225,10 @@ data Prop sig x f = Prop RelationName (Term sig x f)
 
 derive instance Generic (Prop sig x f) _
 instance (Show f, Show x, Show sig) => Show (Prop sig x f) where show x = genericShow x
+derive instance Bifunctor (Prop LatType)
+
+fromEvaluatedProp :: forall a b. EvaluatedProp -> Prop LatType a b
+fromEvaluatedProp = bimap elimBot elimBot
 
 --------------------------------------------------------------------------------
 -- Rule
