@@ -4,7 +4,6 @@ import Data.Tuple.Nested
 import Language.Mfl.Core.Ast
 import Language.Mfl.Generate.Internal.Base
 import Prelude
-
 import Control.Monad.Computation (ComputationT, gets, modify, throwError, tryComputation)
 import Data.Bifunctor (bimap)
 import Data.Bot (elimBot)

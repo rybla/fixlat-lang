@@ -2,6 +2,7 @@ module Text.Pretty where
 
 import Prelude
 
+import Data.Array (intercalate)
 import Data.Array as Array
 import Data.Either (Either(..))
 import Data.List (List)
@@ -42,6 +43,8 @@ ticks = surround' "`"
 brackets = surround "[" "]"
 braces = surround "{" "}"
 parens = surround "(" ")"
+doublequotes = surround "\"" "\""
+quotes = surround "'" "'"
 
 lines = String.joinWith "\n"
 
@@ -57,3 +60,5 @@ infixr 4 appendPlus as <+>
 
 appendNewline str1 str2 = str1 <> "\n" <> str2
 infixr 3 appendNewline as <\>
+
+commas = intercalate ", " <<< Array.fromFoldable

@@ -20,7 +20,7 @@ import Data.Traversable (class Foldable, class Traversable, traverse)
 import Data.Tuple (Tuple)
 import Data.Variant (Variant)
 import Hole (hole)
-import Text.Pretty (class Pretty, pretty)
+import Text.Pretty (class Pretty, commas, parens, pretty, quotes)
 
 --------------------------------------------------------------------------------
 -- Module
@@ -126,8 +126,8 @@ data Term sig x f = Term (PreTerm sig x f) sig
 
 derive instance Generic (Term sig x f) _
 instance (Show f, Show x, Show sig) => Show (Term sig x f) where show x = genericShow x
-instance (Pretty f, Pretty x) => Pretty (Term sig x f) where
-  pretty = hole "TODO"
+instance (Pretty sig, Pretty x, Pretty f) => Pretty (Term sig x f) where
+  pretty (Term t _) = pretty t
 instance (Eq f, Eq x, Eq sig) => Eq (Term sig x f) where eq x = genericEq x
 instance (Ord f, Ord x, Ord sig) => Ord (Term sig x f) where compare x = genericCompare x
 
@@ -146,6 +146,11 @@ instance (Show f, Show x, Show sig) => Show (PreTerm sig x f) where show x = gen
 instance (Eq f, Eq x, Eq sig) => Eq (PreTerm sig x f) where eq x = genericEq x
 instance (Ord f, Ord x, Ord sig) => Ord (PreTerm sig x f) where compare x = genericCompare x
 
+instance (Pretty f, Pretty x, Pretty sig) => Pretty (PreTerm sig x f) where
+  pretty (NeuTerm f ts) = pretty f <> " " <> parens (commas (pretty <$> ts))
+  pretty (ConstrTerm c) = pretty c
+  pretty (QuantTerm q) = pretty q
+
 derive instance Bifunctor (PreTerm sig)
 
 data Constr term
@@ -163,6 +168,13 @@ derive instance Functor Constr
 derive instance Foldable Constr
 derive instance Traversable Constr
 
+instance Pretty term => Pretty (Constr term) where
+  pretty (NatConstr c) = pretty c
+  pretty (BoolConstr c) = pretty c
+  pretty (StringConstr c) = pretty c 
+  pretty (SetConstr c) = pretty c
+  pretty (TupleConstr c) = pretty c
+
 data NatConstr term
   = ZeroConstr
   | SucConstr term
@@ -176,6 +188,11 @@ derive instance Functor NatConstr
 derive instance Foldable NatConstr
 derive instance Traversable NatConstr
 
+instance Pretty term => Pretty (NatConstr term) where
+  pretty ZeroConstr = "Z"
+  pretty (SucConstr n) = parens ("S" <> pretty n)
+  pretty InfinityConstr = "∞"
+
 data StringConstr
   = LiteralStringConstr String
   | ZetaConstr
@@ -184,6 +201,10 @@ derive instance Generic StringConstr _
 instance Show StringConstr where show x = genericShow x
 instance Eq StringConstr where eq x = genericEq x
 instance Ord StringConstr where compare x = genericCompare x
+
+instance Pretty StringConstr where
+  pretty (LiteralStringConstr str) = quotes str
+  pretty ZetaConstr = "ζ"
 
 type BoolConstr = Boolean
 
@@ -200,6 +221,9 @@ derive instance Functor TupleConstr
 derive instance Foldable TupleConstr
 derive instance Traversable TupleConstr
 
+instance Pretty term => Pretty (TupleConstr term) where
+  pretty (MakeTupleConstr t1 t2) = parens (commas (pretty <$> [t1, t2]))
+
 data SetConstr term
   = LiteralSetConstr (Array term)
   | DomainConstr
@@ -211,6 +235,10 @@ instance Ord term => Ord (SetConstr term) where compare x = genericCompare x
 derive instance Functor SetConstr
 derive instance Foldable SetConstr
 derive instance Traversable SetConstr
+
+instance Pretty term => Pretty (SetConstr term) where
+  pretty (LiteralSetConstr set) = pretty set
+  pretty DomainConstr = "DOMAIN"
 
 --------------------------------------------------------------------------------
 -- Proposition

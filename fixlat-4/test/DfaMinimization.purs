@@ -16,7 +16,6 @@ import Data.Set as Set
 import Data.String.CodeUnits as CodeUnits
 import Effect (Effect)
 import Effect.Class.Console as Console
-import Hole (hole)
 import Language.Fixlat.Core.Internal.Base (emptyDatabase)
 import Language.Fixlat.Core.Internal.Generate (generate)
 import Language.Fixlat.Core.ModuleT (ModuleCtx, runModuleT)
@@ -44,7 +43,7 @@ state = do
   let lattice = StringLatticeType
   { lattice
   , data: toDataType lattice
-  , lit: \i -> ConstructorTerm (StringConstructor (show (i :: Int))) [] lattice
+  , lit: \(i :: Int) -> ConstructorTerm (StringConstructor (LiteralString (show i))) [] lattice
   , var: \x -> QuantTerm x lattice
   }
 
@@ -53,7 +52,7 @@ label = do
   let lattice = StringLatticeType
   { lattice
   , data: toDataType lattice
-  , lit: \c -> ConstructorTerm (StringConstructor (CodeUnits.fromCharArray [c])) [] lattice
+  , lit: \c -> ConstructorTerm (StringConstructor (LiteralString (CodeUnits.fromCharArray [c]))) [] lattice
   , var: \x -> QuantTerm x lattice
   }
 
@@ -70,11 +69,13 @@ transition = do
   , lattice
   , data: toDataType lattice
   , make: \s1 s2 l -> Proposition name $
-      ConstructorTerm SetConstructor
-        [ ConstructorTerm TupleConstructor 
+      ConstructorTerm (SetConstructor LiteralSet)
+        [ ConstructorTerm TupleConstructor
             [ ConstructorTerm TupleConstructor [s1, s2] (TupleLatticeType LexicographicTupleOrdering state.lattice state.lattice)
-            , l ]
-            (TupleLatticeType LexicographicTupleOrdering (TupleLatticeType LexicographicTupleOrdering state.lattice state.lattice) label.lattice) ]
+            , l
+            ]
+            (TupleLatticeType LexicographicTupleOrdering (TupleLatticeType LexicographicTupleOrdering state.lattice state.lattice) state.lattice)
+        ]
         lattice
   }
 

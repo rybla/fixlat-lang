@@ -67,3 +67,4 @@ evaluateConcretizeProp source p = do
   liftComputationT (runEvaluationT {sigma} ((evaluateProp <=< concretizeProp) p)) >>= case _ of
     Left err /\ _env -> throwError (source <> ": " <> err)
     Right p' /\ _env -> pure p'
+

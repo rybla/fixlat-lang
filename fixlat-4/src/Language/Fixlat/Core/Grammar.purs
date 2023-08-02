@@ -534,21 +534,29 @@ instance Pretty (Name label) where
 -- PartialOrd instances
 --------------------------------------------------------------------------------
 
+instance PartialOrd ConcreteProposition where
+  comparePartial x y = hole "TODO"
 -- instance PartialOrd ConcreteProposition where
 --   comparePartial (Proposition rel1 arg1) (Proposition rel2 arg2) 
 --     | otherwise = Nothing
 --     | rel1 == rel2 = comparePartial arg1 arg2
 
+instance MeetSemilattice ConcreteProposition where
+  meet x y = hole "TODO"
 -- instance MeetSemilattice ConcreteProposition where
 --   meet (Proposition rel1 arg1) (Proposition rel2 arg2) 
 --     | rel1 == rel2 = Proposition rel1 (join arg1 arg2)
 --     | otherwise = bug $ "meet @ConcreteProposition: Should not take the meet of propositions of different relations."
 
+instance JoinSemilattice ConcreteProposition where
+  join x y = hole "TODO"
 -- instance JoinSemilattice ConcreteProposition where
 --   join (Proposition rel1 arg1) (Proposition rel2 arg2) 
 --     | rel1 == rel2 = Proposition rel1 (meet arg1 arg2)
 --     | otherwise = bug $ "join @ConcreteProposition: Should not take the join of propositions of different relations."
 
+instance PartialOrd ConcreteTerm where
+  comparePartial = hole "TODO"
 -- instance PartialOrd ConcreteTerm where
 --   comparePartial x y = do
 --     let lat1 = typeOfTerm x
@@ -580,7 +588,8 @@ instance Pretty (Name label) where
 --       StringLatticeType /\ ConstructorTerm (StringConstructor x) [] StringLatticeType /\ ConstructorTerm (StringConstructor y) [] StringLatticeType ->  Just (x `compare` y)
 --       _ -> bug $ "comparePartial @ConcreteTerm: invalid case: " <> ticks (show x) <> ", " <> ticks (show y)
 
--- instance MeetSemilattice ConcreteTerm where
+instance MeetSemilattice ConcreteTerm where
+  meet x y = hole "TODO"
 --   meet x y = do
 --     let lat1 = typeOfTerm x
 --     let lat2 = typeOfTerm y
@@ -612,30 +621,31 @@ instance Pretty (Name label) where
 --     where
 --     union xy ys = Set.toUnfoldable (Set.union (Set.fromFoldable xy) (Set.fromFoldable ys))
 
--- instance JoinSemilattice ConcreteTerm where 
---   join x y = do
---     let lat1 = typeOfTerm x
---     let lat2 = typeOfTerm y
---     let lat = assertI equal (lat1 /\ lat2)
---     case lat /\ x /\ y of
---       OpLatticeType _ /\ _ /\ _ -> meet x y
---       TupleLatticeType LexicographicTupleOrdering _ _ /\ ConstructorTerm TupleConstructor [x1, x2] _ /\ ConstructorTerm TupleConstructor [y1, y2] _ -> ConstructorTerm TupleConstructor [join x1 y1, join x2 y2] lat
---       TupleLatticeType ParallelTupleOrdering _ _ /\ ConstructorTerm TupleConstructor [x1, x2] _ /\ ConstructorTerm TupleConstructor [y1, y2] _ -> ConstructorTerm TupleConstructor [join x1 y1, join x2 y2] lat
---       PowerLatticeType _ /\ ConstructorTerm SetConstructor xs _ /\ ConstructorTerm SetConstructor ys _ -> ConstructorTerm SetConstructor (intersection xs ys) lat
---       BoolLatticeType /\ ConstructorTerm (BoolConstructor a) [] BoolLatticeType /\ ConstructorTerm (BoolConstructor b) [] BoolLatticeType -> ConstructorTerm (BoolConstructor (a && b)) [] BoolLatticeType
+instance JoinSemilattice ConcreteTerm where 
+  join x y = hole "TODO"
+  -- join x y = do
+  --   let lat1 = typeOfTerm x
+  --   let lat2 = typeOfTerm y
+  --   let lat = assertI equal (lat1 /\ lat2)
+  --   case lat /\ x /\ y of
+  --     OpLatticeType _ /\ _ /\ _ -> meet x y
+  --     TupleLatticeType LexicographicTupleOrdering _ _ /\ ConstructorTerm TupleConstructor [x1, x2] _ /\ ConstructorTerm TupleConstructor [y1, y2] _ -> ConstructorTerm TupleConstructor [join x1 y1, join x2 y2] lat
+  --     TupleLatticeType ParallelTupleOrdering _ _ /\ ConstructorTerm TupleConstructor [x1, x2] _ /\ ConstructorTerm TupleConstructor [y1, y2] _ -> ConstructorTerm TupleConstructor [join x1 y1, join x2 y2] lat
+  --     PowerLatticeType _ /\ ConstructorTerm SetConstructor xs _ /\ ConstructorTerm SetConstructor ys _ -> ConstructorTerm SetConstructor (intersection xs ys) lat
+  --     BoolLatticeType /\ ConstructorTerm (BoolConstructor a) [] BoolLatticeType /\ ConstructorTerm (BoolConstructor b) [] BoolLatticeType -> ConstructorTerm (BoolConstructor (a && b)) [] BoolLatticeType
 
---       NatLatticeType /\ ConstructorTerm ZeroConstructor []   _ /\ ConstructorTerm ZeroConstructor []   _ -> ConstructorTerm ZeroConstructor [] lat
---       NatLatticeType /\ ConstructorTerm ZeroConstructor []   _ /\ ConstructorTerm SucConstructor  [y'] _ -> ConstructorTerm SucConstructor  [y'] lat
---       NatLatticeType /\ ConstructorTerm SucConstructor  [x'] _ /\ ConstructorTerm ZeroConstructor []   _ -> ConstructorTerm SucConstructor  [x'] lat
---       NatLatticeType /\ ConstructorTerm SucConstructor  [x'] _ /\ ConstructorTerm SucConstructor  [y'] _ -> ConstructorTerm SucConstructor [join x' y'] lat
+  --     NatLatticeType /\ ConstructorTerm ZeroConstructor []   _ /\ ConstructorTerm ZeroConstructor []   _ -> ConstructorTerm ZeroConstructor [] lat
+  --     NatLatticeType /\ ConstructorTerm ZeroConstructor []   _ /\ ConstructorTerm SucConstructor  [y'] _ -> ConstructorTerm SucConstructor  [y'] lat
+  --     NatLatticeType /\ ConstructorTerm SucConstructor  [x'] _ /\ ConstructorTerm ZeroConstructor []   _ -> ConstructorTerm SucConstructor  [x'] lat
+  --     NatLatticeType /\ ConstructorTerm SucConstructor  [x'] _ /\ ConstructorTerm SucConstructor  [y'] _ -> ConstructorTerm SucConstructor [join x' y'] lat
 
---       StringLatticeType /\ ConstructorTerm (StringConstructor s) [] _ /\ ConstructorTerm (StringConstructor t) [] _ ->
---         case String.stripPrefix (String.Pattern s) t of
---           Nothing -> case String.stripPrefix (String.Pattern t) s of
---             Nothing -> ConstructorTerm (StringConstructor "") [] lat -- s nor t is a is a prefix of the other, so go to bot
---             Just t' -> ConstructorTerm (StringConstructor t) [] lat -- t is a prefix of s, so t <= s
---           Just s' -> ConstructorTerm (StringConstructor s) [] lat -- s is a prefix of t, so s <= t
---       _ -> bug "join @ConcreteTerm: invalid case"
---     where
---     intersection xs ys = Set.toUnfoldable (Set.intersection (Set.fromFoldable xs) (Set.fromFoldable ys))
+  --     StringLatticeType /\ ConstructorTerm (StringConstructor s) [] _ /\ ConstructorTerm (StringConstructor t) [] _ ->
+  --       case String.stripPrefix (String.Pattern s) t of
+  --         Nothing -> case String.stripPrefix (String.Pattern t) s of
+  --           Nothing -> ConstructorTerm (StringConstructor "") [] lat -- s nor t is a is a prefix of the other, so go to bot
+  --           Just t' -> ConstructorTerm (StringConstructor t) [] lat -- t is a prefix of s, so t <= s
+  --         Just s' -> ConstructorTerm (StringConstructor s) [] lat -- s is a prefix of t, so s <= t
+  --     _ -> bug "join @ConcreteTerm: invalid case"
+  --   where
+  --   intersection xs ys = Set.toUnfoldable (Set.intersection (Set.fromFoldable xs) (Set.fromFoldable ys))
 

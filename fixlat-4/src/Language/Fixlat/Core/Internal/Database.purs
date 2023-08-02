@@ -1,23 +1,18 @@
 module Language.Fixlat.Core.Internal.Database where
 
-import Data.Lattice
-import Data.Tuple.Nested
+import Data.Lattice (join, (<=?))
+import Data.Tuple.Nested ((/\))
 import Language.Fixlat.Core.Internal.Base
 import Prelude hiding (join)
-
 import Control.Bug (bug)
 import Control.Debug (debugA)
-import Control.Debug as Debug
-import Control.Monad.Except (runExceptT)
 import Control.Monad.Reader (asks)
 import Control.Monad.State (gets, modify_)
-import Control.Monad.Trans.Class (lift)
 import Data.Array as Array
 import Data.Either (Either(..), either, isRight)
 import Data.Either.Nested (type (\/))
 import Data.List (List(..), (:))
 import Data.List as List
-import Data.Make (make)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (over)
@@ -29,10 +24,8 @@ import Language.Fixlat.Core.Internal.Normalization (normalize)
 import Language.Fixlat.Core.Internal.Substitution (substitute)
 import Language.Fixlat.Core.Internal.Unification (unify)
 import Record as R
-import Text.Pretty (braces, pretty, ticks)
+import Text.Pretty (pretty, ticks)
 import Type.Proxy (Proxy(..))
-import Utility (anyListM)
-import Utility (anyListM, (<$$>), (<##>))
 
 -- | Get the highest known proposition of a relation in a database.
 getHighestDb :: forall m. Monad m => G.RelationName -> Database -> m G.ConcreteProposition
@@ -46,7 +39,7 @@ insertPropositionDb :: forall m. Monad m => G.ConcreteProposition -> Database ->
 insertPropositionDb prop db = do
   let rel = G.propositionRelationName prop
   prop' <- getHighestDb rel db
-  let prop'' = join prop prop' 
+  let prop'' = join prop prop'
   if prop' == prop'' 
     then pure $ Left Proxy
     else pure $ Right (over Database (Map.insert rel prop'') db)
@@ -164,23 +157,23 @@ subsumesConcreteTerm' term1 term2
   = subsumes term2 term1
 
 subsumesConcreteTerm' 
-  (G.ConstructorTerm G.ZeroConstructor [_] G.NatLatticeType)
-  (G.ConstructorTerm G.ZeroConstructor [] G.NatLatticeType) = 
+  (G.ConstructorTerm (G.NatConstructor G.Zero) [_] G.NatLatticeType)
+  (G.ConstructorTerm (G.NatConstructor G.Zero) [_] G.NatLatticeType) = 
+  pure true
+
+subsumesConcreteTerm' 
+  (G.ConstructorTerm (G.NatConstructor G.Zero) [_] G.NatLatticeType)
+  (G.ConstructorTerm (G.NatConstructor G.Suc) [_] G.NatLatticeType) = 
   pure false
 
 subsumesConcreteTerm' 
-  (G.ConstructorTerm G.ZeroConstructor [_] G.NatLatticeType)
-  (G.ConstructorTerm G.SucConstructor [_] G.NatLatticeType) = 
-  pure false
-
-subsumesConcreteTerm' 
-  (G.ConstructorTerm G.SucConstructor [_] G.NatLatticeType)
-  (G.ConstructorTerm G.ZeroConstructor [] G.NatLatticeType) = 
+  (G.ConstructorTerm (G.NatConstructor G.Suc) [_] G.NatLatticeType)
+  (G.ConstructorTerm (G.NatConstructor G.Zero) [] G.NatLatticeType) = 
   pure true
 
 subsumesConcreteTerm'
-  (G.ConstructorTerm G.SucConstructor [n1] G.NatLatticeType)
-  (G.ConstructorTerm G.SucConstructor [n2] G.NatLatticeType) = 
+  (G.ConstructorTerm (G.NatConstructor G.Suc) [n1] G.NatLatticeType)
+  (G.ConstructorTerm (G.NatConstructor G.Suc) [n2] G.NatLatticeType) = 
   subsumes n1 n2
 
 subsumesConcreteTerm'
@@ -215,8 +208,8 @@ subsumesConcreteTerm'
 -- In the power set lattice, `xs1` subsumes `xs2` if every element of `xs2`
 -- is equal to some element in `xs1`.
 subsumesConcreteTerm' 
-  (G.ConstructorTerm G.SetConstructor xs1 (G.PowerLatticeType _))
-  (G.ConstructorTerm G.SetConstructor xs2 (G.PowerLatticeType _)) = do
+  (G.ConstructorTerm (G.SetConstructor G.LiteralSet) xs1 (G.PowerLatticeType _))
+  (G.ConstructorTerm (G.SetConstructor G.LiteralSet) xs2 (G.PowerLatticeType _)) = do
   -- debugA $ "subsumption check: " <> pretty xs1 <> " ⊑ " <> pretty xs2
   xs1' <- evaluate `traverse` xs1
   xs2' <- evaluate `traverse` xs2
