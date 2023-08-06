@@ -4,7 +4,6 @@ import Data.Either.Nested
 import Data.Tuple.Nested
 import Prelude
 import Prim hiding (Type)
-
 import Data.Bifunctor (class Bifunctor, bimap)
 import Data.Bot (Bot, elimBot)
 import Data.Either (Either(..))
@@ -53,7 +52,7 @@ newtype FunctionType = FunctionType
 derive instance Newtype FunctionType _
 
 newtype Relation = Relation
-  { domain :: LatType }
+  { sigma :: LatType }
 
 derive instance Newtype Relation _
 
@@ -95,7 +94,7 @@ data Type isLat
   | StringType
   | SetType (Type isLat)
   | TupleType (Type isLat) (Type isLat)
-  | PowerSetType (Type Bot)
+  | PowerSetType isLat (Type Bot)
   -- must correspond to lattice
   | OpType isLat (Type isLat)
 
@@ -106,12 +105,21 @@ toDataType StringType = StringType
 toDataType (SetType s) = SetType (toDataType s)
 toDataType (TupleType s t) = TupleType (toDataType s) (toDataType t)
 toDataType (OpType _ s) = toDataType s
-toDataType (PowerSetType s) = s
+toDataType (PowerSetType _isLat s) = s
 
 derive instance Generic (Type isLat) _
 instance Show isLat => Show (Type isLat) where show x = genericShow x
 derive instance Eq isLat => Eq (Type isLat) 
 derive instance Ord isLat => Ord (Type isLat)
+
+instance Pretty (Type isLat) where
+  pretty BoolType = "Bool"
+  pretty NatType = "Nat"
+  pretty StringType = "String"
+  pretty (SetType t) = "Set " <> pretty t
+  pretty (TupleType t1 t2) = parens (pretty t1 <> " × " <> pretty t2)
+  pretty (PowerSetType _isLat t) = "Pow " <> pretty t
+  pretty (OpType _isLat t) = "Op " <> pretty t
 
 --------------------------------------------------------------------------------
 -- Term
@@ -226,7 +234,7 @@ instance Pretty term => Pretty (TupleConstr term) where
 
 data SetConstr term
   = LiteralSetConstr (Array term)
-  | DomainConstr
+  | SigmaConstr
 
 derive instance Generic (SetConstr term) _
 instance Show term => Show (SetConstr term) where show x = genericShow x
@@ -238,7 +246,7 @@ derive instance Traversable SetConstr
 
 instance Pretty term => Pretty (SetConstr term) where
   pretty (LiteralSetConstr set) = pretty set
-  pretty DomainConstr = "DOMAIN"
+  pretty SigmaConstr = "Sigma"
 
 --------------------------------------------------------------------------------
 -- Proposition

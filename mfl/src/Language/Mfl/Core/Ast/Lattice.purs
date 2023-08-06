@@ -35,9 +35,9 @@ compareTerm = matchEvaluatedTerms "compareTerm"
         if Set.subset set1 set2 then Just LT else
         if Set.subset set2 set1 then Just GT else
         Nothing
-      LiteralSetConstr _ /\ DomainConstr -> Just LT
-      DomainConstr /\ LiteralSetConstr _ -> Just GT
-      DomainConstr /\ DomainConstr -> Just EQ
+      LiteralSetConstr _ /\ SigmaConstr -> Just LT
+      SigmaConstr /\ LiteralSetConstr _ -> Just GT
+      SigmaConstr /\ SigmaConstr -> Just EQ
   , tuple: \((MakeTupleConstr x1 y1) /\ (MakeTupleConstr x2 y2)) ->
       compareTerm x1 x2 >>= case _ of
         LT -> Just LT

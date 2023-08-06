@@ -54,7 +54,7 @@ unifyTerm term1@(Term (ConstrTerm (SetConstr (LiteralSetConstr ts1))) _sig1) ter
   if result 
     then pure unit
     else throwError ("unifyTerm: Cannot unify " <> ticks (pretty term1) <> " with " <> ticks (pretty term2))
-unifyTerm (Term (ConstrTerm (SetConstr DomainConstr)) _sig1) (Term (ConstrTerm (SetConstr DomainConstr)) _sig2) = pure unit
+unifyTerm (Term (ConstrTerm (SetConstr SigmaConstr)) _sig1) (Term (ConstrTerm (SetConstr SigmaConstr)) _sig2) = pure unit
 
 unifyTerm (Term (ConstrTerm (TupleConstr (MakeTupleConstr a1 b1))) _sig1) (Term (ConstrTerm (TupleConstr (MakeTupleConstr a2 b2))) _sig2) = do
   unifyTerm a1 a2
