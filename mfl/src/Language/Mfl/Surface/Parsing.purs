@@ -32,7 +32,12 @@ type ParserErr = String
 throwExpected :: forall a. String -> Parser a
 throwExpected msg = do
   source <- gets _.source
-  throwError $ "Expected '" <> msg <> "' at:\n\n" <> source
+  throwError $ "Expected '" <> msg <> "' at:\n\n" <>
+    if String.length source > maxSourceLength
+      then String.take maxSourceLength source <> "..."
+      else source
+  where
+  maxSourceLength = 100
 
 runParser :: forall a. Parser a -> String -> Effect (String \/ a)
 runParser p source = evalComputationT
@@ -254,39 +259,39 @@ parseTerm :: Parser Term
 parseTerm = parseAny (throwExpected "Term")
   [
   -- NatConstr
-    parseString_ "Zero" /\ \_ -> pure $ ConstrTerm $ NatConstr ZeroConstr
+    parseString_ "Zero" /\ \_ -> pure $ Term Zero []
   ,
     parseString_ "Suc" /\ \_ -> do
       parseWhitespace
       t <- parseTerm
-      pure $ ConstrTerm $ NatConstr $ SucConstr t
+      pure $ Term Suc [t]
   ,
   -- BoolConstr
-    parseString_ "True" /\ \_ -> pure $ ConstrTerm $ BoolConstr true
+    parseString_ "True" /\ \_ -> pure $ Term (Boolean true) []
   ,
-    parseString_ "False" /\ \_ -> pure $ ConstrTerm $ BoolConstr false
+    parseString_ "False" /\ \_ -> pure $ Term (Boolean false) []
   ,
   -- StringConstr
     parseString_ "\"" /\ \_ -> do
       s <- parseUntil \c -> c == codePointFromChar '"'
       parseString_ "\""
-      pure $ ConstrTerm $ StringConstr $ LiteralStringConstr s
+      pure $ Term (String s) []
   ,
-    parseString_ "Zeta" /\ \_ -> pure $ ConstrTerm $ StringConstr $ ZetaConstr
+    parseString_ "Zeta" /\ \_ -> pure $ Term Zero []
   ,
   -- SetConstr
     parseString_ "{" /\ \_ -> do
       ts <- Array.fromFoldable <$> parseMany (commaItem parseTerm)
-      pure $ ConstrTerm $ SetConstr $ LiteralSetConstr ts
+      parseString_ "}"
+      pure $ Term Set ts
   ,
-    parseString_ "Sigma" /\ \_ -> pure $ ConstrTerm $ SetConstr $ SigmaConstr
+    parseString_ "Sigma" /\ \_ -> pure $ Term Sigma []
   ,
   -- TupleConstr
-    parseString_ "Tup" /\ \_ -> do
-      ts <- Array.fromFoldable <$> parseMany do
-        parseWhitespace
-        parseTerm
-      pure $ ConstrTerm $ TupleConstr ts
+    parseString_ "[" /\ \_ -> do
+      ts <- Array.fromFoldable <$> parseMany (commaItem parseTerm)
+      parseString_ "]"
+      pure $ Term Tuple ts
   -- NeuTerm
   ,
     parseString_ "$" /\ \_ -> do
@@ -295,10 +300,12 @@ parseTerm = parseAny (throwExpected "Term")
       ts <- Array.fromFoldable <$> parseMany (commaItem parseTerm)
       parseWhitespace
       parseString_ ")"
-      pure $ NeuTerm f ts
+      pure $ Term (Neu f) ts
   -- VarTerm
   ,
-    parseString_ "@" /\ \_ -> VarTerm <$> parseName
+    parseString_ "@" /\ \_ -> do
+      x <- parseName
+      pure $ Term (Var x) []
   ]
 
 --------------------------------------------------------------------------------
@@ -404,10 +411,13 @@ parseMany p = tryParser p >>= case _ of
     pure (Cons a as)
 
 commaItem :: forall a. Parser a -> Parser a
-commaItem p = do
+commaItem pItem = sepItem pItem (parseString_ ",")
+
+sepItem :: forall a. Parser a -> Parser Unit -> Parser a
+sepItem pItem pSep = do
   parseWhitespace
-  a <- p
-  parseString_ ","
+  a <- pItem
+  pSep
   pure a
 
 -- -- | Parses items of an indented block, with increased indentation level, 

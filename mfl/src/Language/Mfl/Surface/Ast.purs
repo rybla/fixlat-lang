@@ -1,13 +1,17 @@
 module Language.Mfl.Surface.Ast where
 
+import Data.Tuple.Nested
 import Prelude
 import Prim hiding (Type)
 
+import Data.Array as Array
 import Data.Bot (Bot)
+import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 import Data.Top (Top)
-import Data.Tuple.Nested
+import Partial.Unsafe (unsafeCrashWith)
+import Text.Pretty (class Pretty, pretty)
 
 --------------------------------------------------------------------------------
 -- Module
@@ -41,6 +45,7 @@ data Declaration
 
 derive instance Generic Declaration _
 instance Show Declaration where show x = genericShow x
+instance Eq Declaration where eq x y = genericEq x y
 
 --------------------------------------------------------------------------------
 -- Type, DataType, LatType
@@ -61,47 +66,58 @@ data Type isLat
 
 derive instance Generic (Type isLat) _
 instance Show isLat => Show (Type isLat) where show x = genericShow x
+instance Eq isLat => Eq (Type isLat) where eq x y = genericEq x y
 
 --------------------------------------------------------------------------------
 -- Term
 --------------------------------------------------------------------------------
 
-data Term
-  = NeuTerm Name (Array Term)
-  | ConstrTerm Constr
-  | VarTerm Name
+data Term = Term TermLabel (Array Term)
 
 derive instance Generic Term _
 instance Show Term where show x = genericShow x
+instance Eq Term where eq x y = genericEq x y
 
-data Constr
-  = NatConstr NatConstr
-  | BoolConstr BoolConstr
-  | StringConstr StringConstr
-  | SetConstr SetConstr
-  | TupleConstr TupleConstr
+data TermLabel
+  -- Nat
+  = Zero
+  | Suc 
+  | Infinity
+  -- Bool
+  | Boolean Boolean
+  -- String
+  | String String
+  | Zeta
+  -- Set
+  | Set
+  | Sigma
+  -- Tuple
+  | Tuple
+  -- Neu
+  | Neu Name
+  -- Var
+  | Var Name
 
-derive instance Generic Constr _
-instance Show Constr where show x = genericShow x
+derive instance Generic TermLabel _
+instance Show TermLabel where show x = genericShow x
+instance Eq TermLabel where eq x y = genericEq x y
 
-data NatConstr = ZeroConstr | SucConstr Term | InfinityConstr
+instance Pretty Term where
+  pretty (Term Zero []) = "Zero"
+  pretty (Term Suc [t]) = "Suc(" <> pretty t <> ")"
+  pretty (Term Infinity []) = "∞"
+  pretty (Term (Boolean b) []) = if b then "True" else "False"
+  pretty (Term (String s) []) = show s
+  pretty (Term Zeta []) = "Zeta"
+  pretty (Term Set ts) = "{" <> seps "," (pretty <$> ts) <> "}"
+  pretty (Term Sigma []) = "Sigma"
+  pretty (Term Tuple ts) = "[" <> seps "," (pretty <$> ts) <> "]"
+  pretty (Term (Neu f) ts) = "$" <> pretty f <> "(" <> seps "," (pretty <$> ts) <> ")"
+  pretty (Term (Var x) []) = "@" <> pretty x
+  pretty t = unsafeCrashWith "Invalid term: " <> show t
 
-derive instance Generic NatConstr _
-instance Show NatConstr where show x = genericShow x
-
-type BoolConstr = Boolean
-
-data StringConstr = LiteralStringConstr String | ZetaConstr
-
-derive instance Generic StringConstr _
-instance Show StringConstr where show x = genericShow x
-
-data SetConstr = LiteralSetConstr (Array Term) | SigmaConstr
-
-derive instance Generic SetConstr _
-instance Show SetConstr where show x = genericShow x
-
-type TupleConstr = Array Term
+seps :: String -> Array String -> String
+seps sep xs = Array.intercalate " " $ (\str -> str <> sep) <$> xs
 
 --------------------------------------------------------------------------------
 -- Prop
@@ -111,6 +127,7 @@ data Prop = Prop Name Term
 
 derive instance Generic Prop _
 instance Show Prop where show x = genericShow x
+instance Eq Prop where eq x y = genericEq x y
 
 --------------------------------------------------------------------------------
 -- Rule
@@ -128,6 +145,7 @@ data RuleItem
 
 derive instance Generic RuleItem _
 instance Show RuleItem where show x = genericShow x
+instance Eq RuleItem where eq x y = genericEq x y
 
 --------------------------------------------------------------------------------
 -- Name
@@ -137,3 +155,7 @@ data Name = Name String
 
 derive instance Generic Name _
 instance Show Name where show x = genericShow x
+instance Eq Name where eq x y = genericEq x y
+
+instance Pretty Name where
+  pretty (Name s) = s
